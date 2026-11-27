@@ -689,3 +689,13 @@ body::before{display:none}
 .ss-task { min-width: 0; }
 @media (max-width: 700px) { .ss-task { margin-bottom: 16px; } }
 .ss-undo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; padding: 12px 14px; border: 1.5px solid var(--ink); border-radius: 14px; }
+
+.ss-shell, .ss-shell.has-activity { display: grid; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 901px) { .ss-shell.has-activity { grid-template-columns: minmax(0, 1fr) 340px; } }
+.ss-side, .ss-side.is-open { display: flex; position: fixed; z-index: 50; inset: 0 auto 0 0; width: 280px; height: 100dvh; }
+.ss-scrim { display: block; position: fixed; inset: 0; z-index: 40; background: rgb(0 0 0 / .4); }
+.ss-stack { display: grid; gap: 16px; }
+.ss-narrow { max-width: 760px; }
+.ss-choices { list-style: none; padding: 0; display: grid; gap: 10px; }
+.ss-choice { display: flex; gap: 12px; align-items: center; width: 100%; min-height: 64px; padding: 12px; text-align: start; border: 1px solid var(--ink); border-radius: 14px; }
+.ss-choice-text small { display: block; }

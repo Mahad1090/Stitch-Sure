@@ -1,4 +1,6 @@
 import { cn } from '@/lib/utils';
+import { t, term } from '@/lib/i18n';
+import { ORDER } from '@/lib/sample';
 import type { Part } from '@/lib/workflow';
 
 const NECK: Record<string, { open: string; placket: number }> = {
@@ -21,13 +23,13 @@ type Props = {
   select?: ((p: Part) => void) | undefined;
   /** Compact version for side-by-side comparisons. */
   small?: boolean;
-  label?: string;
 };
 
-export function Garment({ sleeve, neckline, part = '', select, small, label }: Props) {
+export function Garment({ sleeve, neckline, part = '', select, small }: Props) {
   const neck = NECK[neckline] ?? NECK['Round neckline']!;
   const sl = SLEEVE[sleeve] ?? SLEEVE['Straight sleeve']!;
-  const desc = label ?? `Purple kurta with ${sleeve.toLowerCase()} and a ${neckline.toLowerCase()}${part ? `. Selected part: ${part.toLowerCase()}` : ''}`;
+  const vars = { garment: term(ORDER.garment), sleeve: term(sleeve), neckline: term(neckline) };
+  const desc = part ? t('garment.altSelected', { ...vars, part: term(part) }) : t('garment.alt', vars);
   return (
     <div className={cn('ss-garment', small && 'ss-garment-sm')}>
       <svg viewBox="0 0 340 365" role="img" aria-label={desc}>
@@ -42,8 +44,8 @@ export function Garment({ sleeve, neckline, part = '', select, small, label }: P
       {/* Pointer shortcuts only: keyboard users choose the part in the form (D5A S-08). */}
       {select && (
         <>
-          <button type="button" tabIndex={-1} className={cn('ss-hotspot ss-hotspot-sleeve', part === 'Sleeve' && 'is-on')} aria-pressed={part === 'Sleeve'} onClick={() => select('Sleeve')}><span aria-hidden className="ss-hotspot-dot" />Sleeve</button>
-          <button type="button" tabIndex={-1} className={cn('ss-hotspot ss-hotspot-neck', part === 'Neckline' && 'is-on')} aria-pressed={part === 'Neckline'} onClick={() => select('Neckline')}><span aria-hidden className="ss-hotspot-dot" />Neckline</button>
+          <button type="button" tabIndex={-1} className={cn('ss-hotspot ss-hotspot-sleeve', part === 'Sleeve' && 'is-on')} aria-pressed={part === 'Sleeve'} onClick={() => select('Sleeve')}><span aria-hidden className="ss-hotspot-dot" />{t('garment.hotspot.Sleeve')}</button>
+          <button type="button" tabIndex={-1} className={cn('ss-hotspot ss-hotspot-neck', part === 'Neckline' && 'is-on')} aria-pressed={part === 'Neckline'} onClick={() => select('Neckline')}><span aria-hidden className="ss-hotspot-dot" />{t('garment.hotspot.Neckline')}</button>
         </>
       )}
     </div>

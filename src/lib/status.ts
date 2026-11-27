@@ -1,11 +1,11 @@
 import type { Role, Workflow } from '@/lib/workflow';
 
 export type StepKey = 'request' | 'review' | 'approval' | 'stitching';
-export const STEPS: { key: StepKey; label: string; who: string }[] = [
-  { key: 'request', label: 'Request', who: 'Customer' },
-  { key: 'review', label: 'Review', who: 'Tailor' },
-  { key: 'approval', label: 'Approval', who: 'Customer' },
-  { key: 'stitching', label: 'Stitching', who: 'Worker' },
+export const STEPS: { key: StepKey; who: Role }[] = [
+  { key: 'request', who: 'customer' },
+  { key: 'review', who: 'tailor' },
+  { key: 'approval', who: 'customer' },
+  { key: 'stitching', who: 'worker' },
 ];
 
 /** 0-3 = the active step; 4 = everything done. -1 = no change requested (nothing to track). */
@@ -19,7 +19,7 @@ export function activeStep(s: Workflow): number {
 }
 
 /** Whose turn it is, in words (critique rows 2, 11, 24). */
-export function turn(s: Workflow, role: Role = 'customer'): string {
+export function turn(s: Workflow, role: Role = 'customer'): '' | 'Waiting for you' | 'Waiting for the tailor' | 'Waiting for the customer' {
   const r = s.request;
   if (r?.status !== 'Pending') return '';
   const tailorsTurn = !r.outcome;

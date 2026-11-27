@@ -143,7 +143,7 @@ describe("S-01 / S-05 / A-18: the tailor's review starts blank", () => {
     click("Send question");
     viewAs("Customer");
     type(/Your answer/, "Nine inches");
-    click("Reply");
+    click("Send reply");
     viewAs("Tailor");
     for (const r of [/Need info|Ask a question/, "Cannot be made"])
       expect(screen.getByRole("radio", { name: r })).not.toBeChecked();
@@ -170,7 +170,11 @@ describe("S-04: focus follows the screen", () => {
     openForm();
     expectHeadingFocus();
     pick(/^Sleeve/);
+    click("Next");
+    expectHeadingFocus();
     pick(/^Cuff Trim/);
+    click("Next");
+    expectHeadingFocus();
     click("Send request");
     await flushSend();
     expectHeadingFocus();

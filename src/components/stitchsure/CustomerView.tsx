@@ -1,131 +1,185 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowLeft, Check, ChevronRight, LoaderCircle, Send, Upload, Undo2, X } from 'lucide-react';
+import { ArrowLeft, Check, ClipboardList, LoaderCircle, MessageSquare, PencilRuler, Send, Upload, Undo2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { CUSTOMER, NOTE_PLACEHOLDER, ORDER, PART_LABEL, styleOptions } from '@/lib/sample';
-import { DESCRIBED, requestedLabel } from '@/lib/workflow';
-import { Card, Chip, Disclosure, ErrorSlot, Facts, Field, Notice, OptionList, Segmented, UndoNotice } from './ui';
+import { CUSTOMER, ORDER, STYLE_OPTIONS } from '@/lib/sample';
+import { t, term } from '@/lib/i18n';
+import { DESCRIBED, requestedLabel, type Part } from '@/lib/workflow';
+import { Card, Chip, Disclosure, ErrorSlot, Facts, Field, Notice, OptionList, UndoNotice, focusProps } from './ui';
 import { Garment } from './Garment';
-import type { StitchSureModel } from './useStitchSure';
+import type { FormStep, StitchSureModel } from './useStitchSure';
 
-/** Customer portal. Which card shows depends on whose turn it is, so there is always one clear next step. */
+/** Customer portal. One card at a time, chosen by whose turn it is, so there is always one clear next step. */
 export function CustomerView({ m }: { m: StitchSureModel }) {
   const { state, customer } = m;
   const r = state.request;
-  const pending = r?.status === 'Pending';
-  let action: ReactNode;
-  if (pending && !r.outcome) action = <WaitingCard m={m} />;
-  else if (pending && r.outcome === 'Needs clarification') action = <QuestionCard m={m} />;
-  else if (pending) action = <DecisionCard m={m} />;
-  else if (customer.showApproved && r?.status === 'Approved') action = <ApprovedCard m={m} />;
-  else if (customer.screen === 'form') action = <RequestForm m={m} />;
-  else action = <HistoryCard m={m} />;
-  // The next step comes first; on the order home, the order itself does (visibility of the next action).
-  const home = customer.screen === 'home' && !pending && !(customer.showApproved && r?.status === 'Approved');
+  if (customer.screen === 'order') return <OrderScreen m={m} />;
+  if (customer.screen === 'message') return <MessageCard m={m} />;
+  if (r?.status === 'Pending') {
+    if (!r.outcome) return <WaitingCard m={m} />;
+    if (r.outcome === 'Needs clarification') return <QuestionCard m={m} />;
+    return <DecisionCard m={m} />;
+  }
+  if (customer.showApproved && r?.status === 'Approved') return <ApprovedCard m={m} />;
+  if (customer.screen === 'form') return <RequestForm m={m} />;
+  return <HomeCard m={m} />;
+}
+
+function BackLink({ m, label = t('back.choices') }: { m: StitchSureModel; label?: string }) {
+  return <Button variant="link" className="ss-link" disabled={m.busy} onClick={() => m.customer.go('home')}><ArrowLeft className="ss-flip" aria-hidden />{label}</Button>;
+}
+
+function SeeOrder({ m }: { m: StitchSureModel }) {
+  return <Button variant="link" className="ss-link" onClick={() => m.customer.go('order')}><ClipboardList aria-hidden />{t('home.order')}</Button>;
+}
+
+/** C1: one question, three choices. */
+function HomeCard({ m }: { m: StitchSureModel }) {
+  const { state, customer, decide, busy } = m;
+  const locked = state.stitching || state.paused;
   return (
-    <div className="ss-split">
-      {home ? <div className="ss-split-home"><OrderCard m={m} />{action}</div>
-            : <><div className="ss-col ss-col-act">{action}</div><div className="ss-col"><OrderCard m={m} /></div></>}
+    <Card title={t('home.title')} focusTarget className="ss-narrow">
+      {state.undo && !state.stitching && !state.finished && <UndoNotice disabled={busy} onUndo={decide.undoApproval} />}
+      <div className="ss-summary">
+        <Garment small sleeve={state.sleeve} neckline={state.neckline} />
+        <Facts label={t('home.agreed')} rows={[
+          { label: t('fact.sleeve'), value: term(state.sleeve) },
+          { label: t('fact.neckline'), value: term(state.neckline) },
+          { label: t('fact.due'), value: <bdi dir="ltr">{ORDER.delivery}</bdi> },
+        ]} />
+      </div>
+      <ul className="ss-choices">
+        <li>
+          <Choice id="change" icon={<PencilRuler aria-hidden />} title={t('home.change')} help={locked ? t(state.stitching ? 'home.change.locked' : 'home.change.paused') : t('home.change.help')} locked={locked} onClick={customer.openForm} />
+        </li>
+        <li><Choice id="order" icon={<ClipboardList aria-hidden />} title={t('home.order')} help={t('home.order.help')} onClick={() => customer.go('order')} /></li>
+        <li><Choice id="message" icon={<MessageSquare aria-hidden />} title={t('home.message')} help={t('home.message.help')} onClick={() => customer.go('message')} /></li>
+      </ul>
+    </Card>
+  );
+}
+
+/** A large choice button. A locked one stays focusable, so keyboard users can read why. */
+function Choice({ id, icon, title, help, locked, onClick }: { id: string; icon: ReactNode; title: string; help: string; locked?: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className="ss-choice" aria-disabled={locked || undefined} aria-labelledby={`choice-${id}`} aria-describedby={`choice-${id}-help`} onClick={() => { if (!locked) onClick(); }}>
+      <span className="ss-choice-icon">{icon}</span>
+      <span className="ss-choice-text"><strong id={`choice-${id}`}>{title}</strong><small id={`choice-${id}-help`}>{help}</small></span>
+    </button>
+  );
+}
+
+/** C6 / C7: design details and history, only when asked for. */
+function OrderScreen({ m }: { m: StitchSureModel }) {
+  const { state, customer } = m;
+  const r = state.request;
+  const earlier = state.events.filter(e => e.status === 'Superseded');
+  return (
+    <div className="ss-stack">
+      <BackLink m={m} label={customer.inProgress ? t('back.request') : t('back.choices')} />
+      <Card title={t('orderScreen.title')} focusTarget aside={<Chip status="Agreed" version={state.version} />}>
+        <div className="ss-job">
+          <Garment sleeve={state.sleeve} neckline={state.neckline} />
+          <Facts label={t('orderScreen.title')} rows={[
+            { label: t('fact.sleeve'), value: term(state.sleeve) },
+            { label: t('fact.neckline'), value: term(state.neckline) },
+            { label: t('fact.fabric'), value: term(ORDER.fabric) },
+            { label: t('fact.reference'), value: r?.reference && r.status === 'Approved' ? t('fact.referenceFile') : t('fact.none') },
+            { label: t('fact.note'), value: r?.status === 'Approved' && r.note ? `“${r.note}”` : t('fact.none') },
+            { label: t('fact.due'), value: <bdi dir="ltr">{ORDER.delivery}</bdi> },
+            { label: t('fact.neededFor'), value: <>{term(ORDER.event)}, <bdi dir="ltr">{ORDER.eventDate}</bdi></> },
+          ]} />
+        </div>
+        <Disclosure label={t('measurements.title')}>
+          <Facts label={t('measurements.title')} rows={CUSTOMER.measurements.map(x => ({ label: term(x.label), value: <bdi dir="ltr">{x.value}</bdi> }))} />
+        </Disclosure>
+      </Card>
+      <Card title={t('history.title')}>
+        <Disclosure label={t('history.earlier', { count: earlier.length })}>
+          {earlier.length
+            ? <ul className="ss-list">{earlier.map((e, i) => <li key={i}><s>{e.title}</s> <span className="ss-meta">· {e.text} · {t('history.replaced')}</span></li>)}</ul>
+            : <p className="ss-meta">{t('history.noEarlier')}</p>}
+        </Disclosure>
+        <Disclosure label={t('history.declined', { count: state.declined.length })}>
+          {state.declined.length
+            ? <ul className="ss-list">{state.declined.map((d, i) => <li key={i}>{d}</li>)}</ul>
+            : <p className="ss-meta">{t('history.noDeclined')}</p>}
+        </Disclosure>
+      </Card>
     </div>
   );
 }
 
-/** C1 / C6 / C7: the order and its design details, with the one main action. */
-function OrderCard({ m }: { m: StitchSureModel }) {
-  const { state, customer, form, busy } = m;
-  const [showMeasure, setShowMeasure] = useState(false);
-  const r = state.request;
-  const home = customer.screen === 'home' && r?.status !== 'Pending' && !(customer.showApproved && r?.status === 'Approved');
-  const locked = state.stitching || state.paused;
-  const selecting = customer.screen === 'form' && !r?.outcome && r?.status !== 'Pending';
-  return (
-    <Card title="Your order" focusTarget={home} className="ss-ordercard" aside={<Chip status={`Agreed · Version ${state.version}`} />}>
-      {home && state.undo && !state.stitching && !state.finished && <UndoNotice disabled={busy} onUndo={m.decide.undoApproval} />}
-      {r?.status === 'Rejected' && home && <Notice tone="ok">Tailor notified: original design kept.</Notice>}
-      <div className="ss-order-body">
-      <div className="ss-order-pic">
-        <Garment sleeve={state.sleeve} neckline={state.neckline} part={selecting ? form.part : ''} select={selecting ? form.choosePart : undefined} />
-        {selecting && <p className="ss-hint ss-center">Tap the sleeve or neckline, or use the buttons.</p>}
-      </div>
-      <div className="ss-order-info">
-      <h3 className="ss-subhead">Design details</h3>
-      <Facts label="Design details" rows={[
-        { label: 'Sleeve style', value: state.sleeve },
-        { label: 'Neckline style', value: state.neckline },
-        { label: 'Fabric', value: ORDER.fabric },
-        { label: 'Reference picture', value: r?.reference && r.status === 'Approved' ? 'reference.jpg (sample)' : 'None' },
-        { label: 'Design note', value: r?.status === 'Approved' && r.note ? `“${r.note}”` : 'None' },
-        { label: 'Due', value: ORDER.delivery },
-        { label: 'Needed for', value: `${ORDER.event}, ${ORDER.eventDate}` },
-      ]} />
-      <Button variant="link" className="ss-link" aria-expanded={showMeasure} onClick={() => setShowMeasure(v => !v)}>Measurements<ChevronRight className={showMeasure ? 'rotate-90' : ''} aria-hidden /></Button>
-      {showMeasure && <Facts label="Measurements" rows={CUSTOMER.measurements.map(x => ({ label: x.label, value: x.value }))} />}
-      {home && (
-        <div className="ss-actions">
-          <Button disabled={busy || locked} onClick={customer.openForm}>Request a change</Button>
-          {locked && <p className="ss-hint">Stitching has started, so changes now go through Master Mahad.</p>}
-        </div>
-      )}
-      </div>
-      </div>
-    </Card>
-  );
-}
-
-/** History and problems: earlier versions with dates, and declined suggestions (critique rows 20, 23). */
-function HistoryCard({ m }: { m: StitchSureModel }) {
-  const { state } = m;
-  const [open, setOpen] = useState<'' | 'earlier' | 'declined'>('');
-  const [report, setReport] = useState(false);
+/** One box and one button. Messaging is simulated. */
+function MessageCard({ m }: { m: StitchSureModel }) {
   const [text, setText] = useState('');
   const [sent, setSent] = useState(false);
-  const earlier = state.events.filter(e => e.status === 'Superseded');
   return (
-    <Card title="History and problems">
-      <ul className="ss-history">
-        <li>
-          <button type="button" aria-expanded={open === 'earlier'} onClick={() => setOpen(open === 'earlier' ? '' : 'earlier')}><ChevronRight className={open === 'earlier' ? 'rotate-90' : ''} aria-hidden />Earlier versions ({earlier.length})</button>
-          {open === 'earlier' && (earlier.length ? <ul>{earlier.map(e => <li key={e.at}><s>{e.title}</s> <span className="ss-meta">· {e.text} · replaced</span></li>)}</ul> : <p className="ss-meta">No earlier versions yet.</p>)}
-        </li>
-        <li>
-          <button type="button" aria-expanded={open === 'declined'} onClick={() => setOpen(open === 'declined' ? '' : 'declined')}><ChevronRight className={open === 'declined' ? 'rotate-90' : ''} aria-hidden />Declined suggestions ({state.declined.length})</button>
-          {open === 'declined' && (state.declined.length ? <ul>{state.declined.map(d => <li key={d}>{d}</li>)}</ul> : <p className="ss-meta">Nothing declined yet.</p>)}
-        </li>
-      </ul>
-      <Button variant="link" className="ss-link" aria-expanded={report} onClick={() => { setReport(v => !v); setSent(false); }}>Report a problem<ChevronRight className={report ? 'rotate-90' : ''} aria-hidden /></Button>
-      {report && (sent
-        ? <Notice tone="ok" role="status">Sent to Master Mahad. He will reply in StitchSure.</Notice>
-        : <div className="ss-conflict">
-            <Field label="What is wrong with your order?" htmlFor="cust-problem" hint="Master Mahad reads this in StitchSure."><Textarea id="cust-problem" rows={3} value={text} onChange={e => setText(e.target.value)} /></Field>
-            <Button variant="outline" disabled={!text.trim()} onClick={() => setSent(true)}><Send />Send to Master Mahad</Button>
-          </div>)}
+    <Card title={t('message.title')} focusTarget className="ss-narrow">
+      <BackLink m={m} />
+      <div role="status">{sent && <Notice tone="ok">{t('message.sent')}</Notice>}</div>
+      {!sent && (
+        <>
+          <Field label={t('message.label')} htmlFor="cust-message" hint={t('message.hint')}><Textarea id="cust-message" rows={4} value={text} onChange={e => setText(e.target.value)} /></Field>
+          <div className="ss-actions"><Button disabled={!text.trim()} aria-describedby="message-help" onClick={() => setSent(true)}><Send className="ss-flip" aria-hidden />{t('message.send')}</Button></div>
+          <p className="ss-hint" id="message-help">{text.trim() ? t('message.simulated') : t('message.needText')}</p>
+        </>
+      )}
     </Card>
   );
 }
 
-/** C2 / C2-N / C-E1 */
+/** C2: one question per screen. Choices are kept when going back. */
 function RequestForm({ m }: { m: StitchSureModel }) {
-  const { state, form, customer, sending, busy } = m;
-  const current = form.part === 'Sleeve' ? state.sleeve : form.part === 'Neckline' ? state.neckline : '';
-  const ready = !!form.part && !!form.style;
-  const described = form.style === DESCRIBED;
-  const styleError = !!state.error && /style/i.test(state.error);
+  const { state, form, sending, busy } = m;
+  const { step, part, style } = form;
+  const current = part === 'Sleeve' ? state.sleeve : part === 'Neckline' ? state.neckline : '';
+  const described = style === DESCRIBED;
+  const question = t(step === 1 ? 'form.q.part' : step === 2 ? 'form.q.style' : 'form.q.note');
+  const missing = step === 1 ? (!part && t('form.needPart')) : step === 2 ? (!style && t('form.needStyle')) : (described && !form.note.trim() && t('form.needNote'));
+  const styles = part
+    ? [
+        ...STYLE_OPTIONS[part].map(value => ({ value: value as string, label: value === current ? t('form.current', { style: term(value) }) : term(value), hint: t(`style.hint.${value}`) })),
+        { value: DESCRIBED as string, label: t('style.describe'), hint: t('style.describe.hint') },
+      ]
+    : [];
   return (
-    <Card title="Request a change" focusTarget aside={<Button variant="link" className="ss-link" onClick={customer.backToOrder}><ArrowLeft aria-hidden />Back to order</Button>}>
+    <Card title={t('form.title')} className="ss-narrow">
+      <BackLink m={m} />
+      <p className="ss-stepcount" id="step-count">{t('form.step', { step })}</p>
+      <div className="ss-progress" role="progressbar" aria-labelledby="step-count" aria-valuemin={0} aria-valuemax={3} aria-valuenow={step}><span style={{ inlineSize: `${(step / 3) * 100}%` }} /></div>
+      {/* A new element per step, so focus lands on this step's heading. */}
+      <h3 key={step} className="ss-question" {...focusProps(true)}>{question}</h3>
       <ErrorSlot state={state} />
-      <Segmented legend="1. Which part?" value={form.part} options={[{ value: 'Sleeve', label: PART_LABEL.Sleeve }, { value: 'Neckline', label: PART_LABEL.Neckline }]} onChange={form.choosePart} />
-      {form.part
-        ? <div className={styleError ? 'ss-error-group' : undefined}><OptionList legend="2. Which style?" value={form.style} options={styleOptions(form.part, current)} onChange={form.chooseStyle} /></div>
-        : <p className="ss-hint">Choose a part first. Its styles appear here.</p>}
-      <Field label={described ? '3. Note (needed: describe the style)' : '3. Note (optional)'} htmlFor="req-note"><Textarea id="req-note" rows={3} value={form.note} onChange={e => form.setNote(e.target.value)} placeholder={NOTE_PLACEHOLDER[form.part]} /></Field>
-      <div className="ss-attach">
-        <Button variant="outline" disabled={busy} onClick={form.toggleReference}>{form.reference ? <Check /> : <Upload />}{form.reference ? 'Remove reference' : 'Add reference'}</Button>
-        <span className="ss-meta">{form.reference ? 'reference.jpg · sample photo' : 'Optional · sample upload'}</span>
+      {step === 1 && (
+        <>
+          <p className="ss-hint">{t('form.tapHint')}</p>
+          <Garment sleeve={state.sleeve} neckline={state.neckline} part={part} select={form.choosePart} />
+          <OptionList<Part> legend={question} hideLegend value={part} options={(['Sleeve', 'Neckline'] as const).map(p => ({ value: p, label: t(`part.${p}`), hint: term(p === 'Sleeve' ? state.sleeve : state.neckline) }))} onChange={form.choosePart} />
+        </>
+      )}
+      {step === 2 && <OptionList legend={question} hideLegend value={style} options={styles} onChange={form.setStyle} />}
+      {step === 3 && part && (
+        <>
+          <Field label={t(described ? 'form.note.required' : 'form.note.optional')} htmlFor="req-note"><Textarea id="req-note" rows={3} value={form.note} onChange={e => form.setNote(e.target.value)} placeholder={t(`form.note.${part}`)} /></Field>
+          <div className="ss-attach">
+            <Button variant="outline" disabled={busy} onClick={() => form.setReference(!form.reference)}>{form.reference ? <Check aria-hidden /> : <Upload aria-hidden />}{t(form.reference ? 'form.removePhoto' : 'form.addPhoto')}</Button>
+            <span className="ss-meta" role="status">{t(form.reference ? 'form.photoAttached' : 'form.photoOptional')}</span>
+          </div>
+          <div className="ss-preview">
+            <span>{t('form.asking')}</span>
+            <p><strong>{t(`part.${part}`)}: {term(current)} → {described ? `“${form.note.trim() || '…'}”` : term(style)}</strong></p>
+            <p>{t('form.nothingChanges')}</p>
+          </div>
+        </>
+      )}
+      <div className="ss-actions ss-actions-split">
+        <Button variant="outline" disabled={busy} onClick={() => (step === 1 ? m.customer.go('home') : form.setStep((step - 1) as FormStep))}><ArrowLeft className="ss-flip" aria-hidden />{t('back')}</Button>
+        {step < 3
+          ? <Button key="next" disabled={Boolean(missing)} aria-describedby={missing ? 'step-help' : undefined} onClick={() => form.setStep((step + 1) as FormStep)}>{t('next')}</Button>
+          : <Button key="send" disabled={busy || Boolean(missing)} aria-busy={sending} aria-describedby={missing ? 'step-help' : undefined} onClick={form.sendRequest}>{sending ? <LoaderCircle className="motion-safe:animate-spin" aria-hidden /> : <Send className="ss-flip" aria-hidden />}{t(sending ? 'form.sending' : 'form.send')}</Button>}
       </div>
-      {ready && <div className="ss-preview"><span>You are asking for</span><p><strong>{form.part}: {current} → {described ? `as described: “${form.note || '…'}”` : form.style}</strong>. Nothing changes until Master Mahad and you both agree.</p></div>}
-      <div className="ss-actions">
-        <Button disabled={busy} onClick={form.sendRequest} aria-busy={sending}>{sending ? <LoaderCircle className="motion-safe:animate-spin" /> : <Send />}{sending ? 'Sending…' : 'Send request'}</Button>
-      </div>
+      {missing && <p className="ss-hint" id="step-help">{missing}</p>}
     </Card>
   );
 }
@@ -135,22 +189,22 @@ function WaitingCard({ m }: { m: StitchSureModel }) {
   const { state, customer, busy } = m;
   const r = state.request!;
   return (
-    <Card title="Your request" focusTarget aside={<Chip status="Waiting for the tailor" />}>
-      <p className="ss-ask"><span>{PART_LABEL[r.part]}</span> {r.part === 'Sleeve' ? state.sleeve : state.neckline} → <strong>{requestedLabel(r)}</strong></p>
-      <p className="ss-meta">{r.note ? `Note: “${r.note}”` : 'No note added.'}{r.reference ? ' · Reference photo attached' : ''}</p>
-      {r.answer && <p className="ss-meta">Your reply: “{r.answer}”</p>}
-      <Notice tone="info">Your agreed design (Version {state.version}) stays the same. Nothing is stitched from your request until you both agree.</Notice>
+    <Card title={t('waiting.title')} focusTarget className="ss-narrow" aside={<Chip status="Waiting for the tailor" />}>
+      <p className="ss-ask"><span>{t(`part.${r.part}`)}:</span> {term(r.part === 'Sleeve' ? state.sleeve : state.neckline)} → <strong>{term(requestedLabel(r))}</strong></p>
+      <p className="ss-meta">{r.note ? t('waiting.note', { note: r.note }) : t('waiting.noNote')}{r.reference ? ` · ${t('waiting.photo')}` : ''}</p>
+      {r.answer && <p className="ss-meta">{t('waiting.reply', { answer: r.answer })}</p>}
+      <Notice tone="info">{t('waiting.same', { version: state.version })}</Notice>
       <ErrorSlot state={state} />
-      <Disclosure label="What happens next">
-        <p className="ss-meta">Master Mahad checks whether it can be made, and what it changes in cost and delivery. Then you approve it or keep your agreed design.</p>
-      </Disclosure>
+      {/* A safe control comes first in the Tab order, before anything destructive (D5A S-04). */}
+      <Disclosure label={t('waiting.nextLabel')}><p className="ss-meta">{t('waiting.nextText')}</p></Disclosure>
+      <SeeOrder m={m} />
       {!customer.confirmCancel
-        ? <div className="ss-actions"><Button variant="outline" disabled={busy} onClick={() => customer.setConfirmCancel(true)}><X />Cancel request</Button></div>
+        ? <div className="ss-actions"><Button variant="outline" disabled={busy} onClick={() => customer.setConfirmCancel(true)}><X aria-hidden />{t('cancel.button')}</Button></div>
         : <div className="ss-confirm-box" role="group" aria-labelledby="cancel-q">
-            <p id="cancel-q"><strong>Cancel this request?</strong> Your agreed design stays the same.</p>
+            <p id="cancel-q"><strong>{t('cancel.question')}</strong> {t('cancel.same')}</p>
             <div className="ss-actions">
-              <Button variant="outline" autoFocus onClick={() => customer.setConfirmCancel(false)}>No, keep request</Button>
-              <Button variant="outline" onClick={customer.cancelRequest}>Yes, cancel</Button>
+              <Button variant="outline" autoFocus onClick={() => customer.setConfirmCancel(false)}>{t('cancel.no')}</Button>
+              <Button variant="outline" onClick={customer.cancelRequest}>{t('cancel.yes')}</Button>
             </div>
           </div>}
     </Card>
@@ -162,12 +216,13 @@ function QuestionCard({ m }: { m: StitchSureModel }) {
   const { state, customer, busy } = m;
   const r = state.request!;
   return (
-    <Card title="Master Mahad asked" focusTarget aside={<Chip status="Waiting for you" />}>
+    <Card title={t('question.title')} focusTarget className="ss-narrow" aside={<Chip status="Waiting for you" />}>
       <blockquote className="ss-quote">“{r.reason}”</blockquote>
-      <p className="ss-meta">About your request: {PART_LABEL[r.part]} → {requestedLabel(r)}</p>
-      <Field label="Your answer" htmlFor="req-answer"><Textarea id="req-answer" rows={3} value={customer.answer} onChange={e => customer.setAnswer(e.target.value)} placeholder="e.g. 22 inches, same as before" /></Field>
+      <p className="ss-meta">{t('question.about', { part: t(`part.${r.part}`), style: term(requestedLabel(r)) })}</p>
+      <Field label={t('question.answer')} htmlFor="req-answer"><Textarea id="req-answer" rows={3} value={customer.answer} onChange={e => customer.setAnswer(e.target.value)} placeholder={t('question.placeholder')} /></Field>
       <ErrorSlot state={state} />
-      <div className="ss-actions"><Button disabled={busy} onClick={customer.sendAnswer}><Send />Reply</Button></div>
+      <div className="ss-actions"><Button disabled={busy} onClick={customer.sendAnswer}><Send className="ss-flip" aria-hidden />{t('question.reply')}</Button></div>
+      <SeeOrder m={m} />
     </Card>
   );
 }
@@ -178,31 +233,35 @@ function DecisionCard({ m }: { m: StitchSureModel }) {
   const r = state.request!;
   const impossible = r.outcome === 'Impossible';
   const offer = impossible ? r.alternative ?? '' : requestedLabel(r);
-  const now = r.part === 'Sleeve' ? state.sleeve : state.neckline;
+  const unchanged = /unchanged/i.test(r.date ?? '');
   return (
-    <Card title="Choose an option" focusTarget aside={<Chip status="Waiting for you" />}>
-      <p className="ss-meta">{PART_LABEL[r.part]}: {now} → {offer}</p>
-      <div className="ss-options-pair">
-        <div className={impossible ? 'ss-offer ss-offer-no' : 'ss-offer'}>
-          <span className="ss-eyebrow">You asked for</span>
-          <h3>{impossible ? <s>{requestedLabel(r)}</s> : requestedLabel(r)}</h3>
-          <Chip status={impossible ? 'Cannot be made' : 'Can be made'} />
+    <Card title={t('decision.title')} focusTarget className="ss-narrow" aside={<Chip status="Waiting for you" />}>
+      {impossible && (
+        <div className="ss-offer ss-offer-no">
+          <span className="ss-eyebrow">{t('decision.asked')}</span>
+          <h3><s>{term(requestedLabel(r))}</s></h3>
+          <Chip status="Cannot be made" />
           {r.reason && <p>{r.reason}</p>}
         </div>
-        <div className="ss-offer ss-offer-yes">
-          <span className="ss-eyebrow">{impossible ? 'Other options from the tailor' : 'Tailor confirms'}</span>
-          <h3>{offer}</h3>
-          <Chip status="Can be made" />
-          <figure className="ss-offer-preview"><Garment small sleeve={r.part === 'Sleeve' ? offer : state.sleeve} neckline={r.part === 'Neckline' ? offer : state.neckline} part={r.part} /><figcaption>Preview: {offer}</figcaption></figure>
-          <dl className="ss-effects"><div><dt>Cost</dt><dd>{r.cost}</dd></div><div><dt>Delivery date change</dt><dd>{/unchanged/i.test(r.date ?? '') ? 'None' : r.date}</dd></div></dl>
-          {/unchanged/i.test(r.date ?? '') && <p className="ss-hint">Still ready before {ORDER.event} ({ORDER.eventDate}).</p>}
-        </div>
+      )}
+      <div className="ss-offer ss-offer-yes">
+        <span className="ss-eyebrow">{t(impossible ? 'decision.other' : 'decision.confirms')}</span>
+        <h3>{term(offer)}</h3>
+        <Chip status="Can be made" />
+        {!impossible && r.reason && <p>{r.reason}</p>}
+        <figure className="ss-offer-preview"><Garment small sleeve={r.part === 'Sleeve' ? offer : state.sleeve} neckline={r.part === 'Neckline' ? offer : state.neckline} part={r.part} /><figcaption>{t('decision.preview', { style: term(offer) })}</figcaption></figure>
+        <dl className="ss-effects">
+          <div><dt>{t('decision.cost')}</dt><dd>{r.cost}</dd></div>
+          <div><dt>{t('decision.dateChange')}</dt><dd>{unchanged ? t('fact.none') : r.date}</dd></div>
+        </dl>
+        {unchanged && <p className="ss-hint">{t('decision.stillReady', { event: term(ORDER.event), date: ORDER.eventDate })}</p>}
       </div>
       <ErrorSlot state={state} />
       <div className="ss-equal">
-        <div><Button variant="outline" disabled={busy} onClick={decide.keepOriginal}>Keep my original design</Button><p className="ss-hint">Your order continues with your agreed design (Version {state.version}). The tailor will be told.</p></div>
-        <div><Button variant="outline" disabled={busy} onClick={decide.approve}><Check />Approve {offer}</Button><p className="ss-hint">{offer} becomes your agreed design (Version {state.version + 1}). You can undo until the worker starts.</p></div>
+        <div><Button variant="outline" disabled={busy} onClick={decide.keepOriginal}>{t('decision.keep')}</Button><p className="ss-hint">{t('decision.keep.help', { version: state.version })}</p></div>
+        <div><Button variant="outline" disabled={busy} onClick={decide.approve}><Check aria-hidden />{t('decision.approve', { style: term(offer) })}</Button><p className="ss-hint">{t('decision.approve.help', { style: term(offer), version: state.version + 1 })}</p></div>
       </div>
+      <SeeOrder m={m} />
     </Card>
   );
 }
@@ -210,17 +269,18 @@ function DecisionCard({ m }: { m: StitchSureModel }) {
 /** C5: confirmation, a summary, and a clearly bounded undo (rows 5, 26). */
 function ApprovedCard({ m }: { m: StitchSureModel }) {
   const { state, customer, decide, busy } = m;
+  const design = state.request?.part === 'Neckline' ? state.neckline : state.sleeve;
   return (
-    <Card title={`${state.request?.part === 'Sleeve' ? state.sleeve : state.neckline} approved`} focusTarget aside={<Chip status="Approved" />}>
-      <Notice tone="ok">This is now your agreed design (Version {state.version}). The worker can see it. Your old design (Version {state.version - 1}) is replaced.</Notice>
-      <p><strong>Your agreed design:</strong> {state.sleeve} · {state.neckline} · Due {ORDER.delivery}</p>
-      <p className="ss-meta">{state.stitching ? 'The worker has started stitching.' : 'The worker has not started yet.'}</p>
+    <Card title={t('approved.title', { style: term(design) })} focusTarget className="ss-narrow" aside={<Chip status="Approved" />}>
+      <Notice tone="ok">{t('approved.notice', { version: state.version, old: state.version - 1 })}</Notice>
+      <p className="ss-gap"><strong>{t('approved.design')}</strong> {term(state.sleeve)} · {term(state.neckline)} · {t('order.due', { date: ORDER.delivery })}</p>
+      <p className="ss-meta">{t(state.stitching ? 'approved.started' : 'approved.notStarted')}</p>
       <ErrorSlot state={state} />
       <div className="ss-actions">
-        <Button onClick={() => customer.setShowApproved(false)}>Back to my orders</Button>
-        <Button variant="outline" disabled={busy || state.stitching} onClick={decide.undoApproval}><Undo2 />Undo approval</Button>
+        <Button onClick={() => { customer.setShowApproved(false); customer.go('home'); }}>{t('back.choices')}</Button>
+        <Button variant="outline" disabled={busy || state.stitching} onClick={decide.undoApproval}><Undo2 className="ss-flip" aria-hidden />{t('undo.button')}</Button>
       </div>
-      <p className="ss-hint">{state.stitching ? 'Undo is no longer available because stitching has started.' : 'Undo is available until the worker starts stitching.'}</p>
+      <p className="ss-hint">{t(state.stitching ? 'approved.undoGone' : 'approved.undoUntil')}</p>
     </Card>
   );
 }

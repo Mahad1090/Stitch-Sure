@@ -6,19 +6,19 @@ const stamp = () => new Date().toLocaleString('en-US', { month: 'short', day: 'n
 /** The tailor decides every value: nothing is pre-filled (D5A S-01, S-05, A-18). */
 const BLANK_REVIEW = { outcome: '' as Outcome | '', reason: '', question: '', alternative: '', cost: '', date: '' };
 
-export type CustomerScreen = 'home' | 'form';
+export type CustomerScreen = 'home' | 'form' | 'order' | 'message';
+export type FormStep = 1 | 2 | 3;
 
 /** All screen state and handlers. The workflow rules themselves live in `lib/workflow.ts`. */
 export function useStitchSure() {
-  const [state, rawDispatch] = useReducer(workflowReducer, initialWorkflow);
-  const [feedback, setFeedback] = useState('');
-  const dispatch = useCallback((action: Action) => { setFeedback(''); rawDispatch(action); }, []);
+  const [state, dispatch] = useReducer(workflowReducer, initialWorkflow);
 
   const [role, setRole] = useState<Role>('customer');
   const [navOpen, setNavOpen] = useState(false);
 
   // Customer
   const [screen, setScreen] = useState<CustomerScreen>('home');
+  const [step, setStep] = useState<FormStep>(1);
   const [part, setPart] = useState<Part | ''>('');
   const [style, setStyle] = useState('');
   const [note, setNote] = useState('');
@@ -42,40 +42,36 @@ export function useStitchSure() {
   const [reportOpen, setReportOpen] = useState(false);
   const [problemKind, setProblemKind] = useState('');
   const [problem, setProblem] = useState('');
-  const [showEarlier, setShowEarlier] = useState(false);
 
   // A confirmation message belongs to the person who acted, so hide it once the view switches role.
   const [hiddenNote, setHiddenNote] = useState('');
-  const noteText = state.error ? '' : feedback || state.message;
+  const noteText = state.error ? '' : state.message;
   const noteRef = useRef('');
   noteRef.current = noteText;
   const banner = noteText && noteText !== hiddenNote ? noteText : '';
-  const switchRole = useCallback((r: Role) => { setHiddenNote(noteRef.current); setRole(r); setNavOpen(false); }, []);
+  const switchRole = useCallback((r: Role) => {
+    setHiddenNote(noteRef.current); setRole(r); setNavOpen(false);
+    setScreen(s => (s === 'form' ? s : 'home'));
+  }, []);
 
+  /** Clears the last message and error without changing the workflow. */
+  const clearNotes = () => dispatch({ type: 'acknowledge', value: state.acknowledged });
+  const go = (to: CustomerScreen) => { clearNotes(); setScreen(to); };
   // A new request always opens empty (critique row 22).
-  const openForm = () => { setPart(''); setStyle(''); setNote(''); setReference(false); setScreen('form'); dispatch({ type: 'acknowledge', value: state.acknowledged }); };
-  const backToOrder = () => { setScreen('home'); setFeedback(''); rawDispatch({ type: 'acknowledge', value: state.acknowledged }); };
+  const openForm = () => { setPart(''); setStyle(''); setNote(''); setReference(false); setStep(1); go('form'); };
 
   const choosePart = (p: Part) => {
     if (p === part) return;
     setPart(p); setStyle('');
-    setFeedback(`${p} selected. Choose a style next.`);
-  };
-  const chooseStyle = (v: string) => { setStyle(v); setFeedback(''); };
-  const toggleReference = () => {
-    setFeedback(reference ? 'Reference removed.' : 'Reference attached (sample photo).');
-    setReference(v => !v);
   };
 
   const sendRequest = () => {
     if (sendLock.current) return;
-    const at = stamp();
-    const probe = workflowReducer(state, { type: 'request', part, style, note, reference, at });
-    if (probe.error) { dispatch({ type: 'request', part, style, note, reference, at }); return; }
+    const action: Action = { type: 'request', part, style, note, reference, at: stamp() };
+    if (workflowReducer(state, action).error) { dispatch(action); return; }
     sendLock.current = true; setSending(true);
-    setFeedback('Sending your request. Your note and reference are kept.');
     sendTimer.current = setTimeout(() => {
-      dispatch({ type: 'request', part, style, note, reference, at });
+      dispatch(action);
       setSending(false); sendLock.current = false; setScreen('home');
     }, 700);
   };
@@ -93,25 +89,29 @@ export function useStitchSure() {
   const keepOriginal = () => dispatch({ type: 'reject', at: stamp() });
   const markSeen = () => dispatch({ type: 'seen' });
   const sendReport = () => {
-    const before = state.paused;
-    const next = workflowReducer(state, { type: 'conflict', kind: problemKind, reason: problem, at: stamp() });
-    dispatch({ type: 'conflict', kind: problemKind, reason: problem, at: stamp() });
-    if (!before && next.paused) { setReportOpen(false); setProblem(''); setProblemKind(''); }
+    const action: Action = { type: 'conflict', kind: problemKind, reason: problem, at: stamp() };
+    const next = workflowReducer(state, action);
+    dispatch(action);
+    if (!state.paused && next.paused) { setReportOpen(false); setProblem(''); setProblemKind(''); }
   };
+  const finish = () => dispatch({ type: 'finish', at: stamp() });
+  const resolveProblem = () => dispatch({ type: 'resolve', at: stamp() });
 
   const reset = () => {
     dispatch({ type: 'reset' });
-    setRole('customer'); setScreen('home'); setShowApproved(false); setConfirmCancel(false); setAnswer('');
+    setRole('customer'); setScreen('home'); setStep(1); setShowApproved(false); setConfirmCancel(false); setAnswer('');
     setPart(''); setStyle(''); setNote(''); setReference(false);
-    setReportOpen(false); setProblem(''); setProblemKind(''); setShowEarlier(false);
+    setReportOpen(false); setProblem(''); setProblemKind('');
     setDraft(BLANK_REVIEW);
   };
 
-  const busy = sending;
+  /** True while a request needs someone's attention, so progress and history are worth showing. */
+  const inProgress = state.request?.status === 'Pending' || (showApproved && state.request?.status === 'Approved');
+
   return {
-    state, dispatch, role, chooseRole: switchRole, navOpen, setNavOpen, banner, busy, sending,
-    customer: { screen, openForm, backToOrder, confirmCancel, setConfirmCancel, cancelRequest, answer, setAnswer, sendAnswer, showApproved, setShowApproved },
-    form: { part, style, note, setNote, reference, choosePart, chooseStyle, toggleReference, sendRequest },
+    state, dispatch, role, chooseRole: switchRole, navOpen, setNavOpen, banner, busy: sending, sending,
+    customer: { screen, go, openForm, inProgress, confirmCancel, setConfirmCancel, cancelRequest, answer, setAnswer, sendAnswer, showApproved, setShowApproved },
+    form: { step, setStep, part, style, setStyle, note, setNote, reference, setReference, choosePart, sendRequest },
     review: {
       ...draft, sendReview,
       /** Changing the outcome clears every field, so no text from another outcome is sent. */
@@ -123,7 +123,7 @@ export function useStitchSure() {
       setDate: (date: string) => edit({ date }),
     },
     decide: { approve, undoApproval, keepOriginal, markSeen },
-    worker: { reportOpen, setReportOpen, problemKind, setProblemKind, problem, setProblem, sendReport, showEarlier, setShowEarlier },
+    worker: { reportOpen, setReportOpen, problemKind, setProblemKind, problem, setProblem, sendReport, finish, resolveProblem },
     reset,
   };
 }

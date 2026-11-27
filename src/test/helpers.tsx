@@ -22,15 +22,18 @@ export async function flushSend() {
   });
 }
 
-export const openForm = () => click("Request a change");
+export const openForm = () => click("Change my design");
 
+/** Walks the three one-question screens and sends. */
 export async function sendRequest(
   o: { style?: RegExp; note?: string } = { style: /^Bell sleeves/ },
 ) {
   openForm();
   pick(/^Sleeve/);
+  click("Next");
   pick(o.style ?? /^Bell sleeves/);
-  if (o.note) type(/Note/, o.note);
+  click("Next");
+  if (o.note) type(/^Note/, o.note);
   click("Send request");
   await flushSend();
 }
@@ -54,7 +57,7 @@ export function reviewImpossible() {
   click("Send review to customer");
 }
 
-export const backFromApproved = () => click("Back to my orders");
+export const backFromApproved = () => click("Back to choices");
 
 export function startStitching() {
   viewAs("Worker");

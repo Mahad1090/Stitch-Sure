@@ -2,64 +2,34 @@ import { ArrowRight, Eye, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { CUSTOMER, ORDER, RELEVANT_MEASUREMENT, outcomeHelp, outcomeLabel, noticeText } from '@/lib/sample';
+import { CUSTOMER, ORDER, RELEVANT_MEASUREMENT, noticeText } from '@/lib/sample';
+import { t, term } from '@/lib/i18n';
 import { requestedLabel, type Outcome, type ProductionStage } from '@/lib/workflow';
-import { Avatar, Card, Chip, ErrorSlot, Facts, Field, Notice, Segmented } from './ui';
+import { Timeline } from './Activity';
+import { Avatar, Card, Chip, Disclosure, ErrorSlot, Facts, Field, Notice, OptionList, Segmented, focusProps } from './ui';
 import { Garment } from './Garment';
 import type { StitchSureModel } from './useStitchSure';
 
-const STAGES: { value: ProductionStage; label: string }[] = [{ value: 'Not cut', label: 'Not cut' }, { value: 'Cut', label: 'Cut' }, { value: 'Stitching', label: 'Stitching' }];
-const OUTCOMES: { value: Outcome; label: string }[] = (['Possible', 'Impossible', 'Needs clarification'] as Outcome[]).map(o => ({ value: o, label: outcomeLabel[o] }));
+const STAGES: ProductionStage[] = ['Not cut', 'Cut', 'Stitching'];
+const OUTCOMES: Outcome[] = ['Possible', 'Impossible', 'Needs clarification'];
 
-/** Reading order for the tailor: 1 who is asking, 2 what they want, 3 your decision. */
+/** One decision at a time: what the customer wants, then the review. Everything else is behind a disclosure. */
 export function TailorView({ m }: { m: StitchSureModel }) {
-  const { state, dispatch } = m;
+  const { state, worker } = m;
   const r = state.request;
   return (
-    <div className="ss-tailor">
-        {state.paused && (
-          <Card title="Problem reported by Shayan" className="ss-span" aside={<Chip status="Waiting for you" />}>
-            <blockquote className="ss-quote">“{[...state.events].reverse().find(e => e.title === 'Worker reported a problem')?.text}”</blockquote>
-            <p className="ss-meta">Work on SS-014 is on hold until you reply.</p>
-            <div className="ss-actions"><Button variant="outline" onClick={() => dispatch({ type: 'resolve', at: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) })}>Mark as solved and resume work</Button></div>
-          </Card>
-        )}
-        <CustomerCard relevant={r?.part} />
-        <RequestCard m={m} />
-        <ReviewCard m={m} />
+    <div className="ss-stack ss-narrow">
+      {state.paused && (
+        <Card title={t('tailor.problem.title')} aside={<Chip status="Waiting for you" />}>
+          <blockquote className="ss-quote">“{[...state.events].reverse().find(e => e.title === 'Worker reported a problem')?.text}”</blockquote>
+          <p className="ss-meta">{t('tailor.problem.hold')}</p>
+          <div className="ss-actions"><Button variant="outline" onClick={worker.resolveProblem}>{t('tailor.problem.solve')}</Button></div>
+        </Card>
+      )}
+      <RequestCard m={m} />
+      {r && <ReviewCard m={m} />}
+      <MoreCard m={m} />
     </div>
-  );
-}
-
-function CustomerCard({ relevant }: { relevant: 'Sleeve' | 'Neckline' | undefined }) {
-  const key = relevant ? RELEVANT_MEASUREMENT[relevant] : undefined;
-  return (
-    <Card title="Customer" step="1" className="ss-hcard ss-span" aside={<span className="ss-sample">Sample data</span>}>
-      <div className="ss-hbody">
-      <div>
-      <div className="ss-person">
-        <Avatar initials={CUSTOMER.initials} size="lg" />
-        <div>
-          <h3>{CUSTOMER.name}</h3>
-          <p>{CUSTOMER.since}</p>
-          <p>{CUSTOMER.contact}</p>
-        </div>
-      </div>
-      <h3 className="ss-subhead">This order</h3>
-      <Facts label="Order details" rows={[
-        { label: 'Order', value: `${ORDER.id} · ${ORDER.garment}` },
-        { label: 'Fabric', value: ORDER.fabric },
-        { label: 'Placed', value: ORDER.placed },
-        { label: 'Delivery', value: ORDER.delivery },
-        { label: 'Needed for', value: `${ORDER.event} · ${ORDER.eventDate}` },
-      ]} />
-      </div>
-      <div>
-      <h3 className="ss-subhead ss-subhead-box">Measurements</h3>
-      <Facts label="Measurements" rows={CUSTOMER.measurements.map(x => ({ label: x.label, value: x.value, flag: x.label === key ? 'Relevant to this request' : undefined }))} />
-      </div>
-      </div>
-    </Card>
   );
 }
 
@@ -68,10 +38,10 @@ function RequestCard({ m }: { m: StitchSureModel }) {
   const r = state.request;
   if (!r) {
     return (
-      <Card title="What they want" step="2">
+      <Card title={t('tailor.request.title')} focusTarget>
         <div className="ss-empty">
-          <p><strong>No change request yet.</strong></p>
-          <p>When Areeba asks for a change, it appears here beside her details.</p>
+          <p><strong>{t('tailor.empty.title')}</strong></p>
+          <p>{t('tailor.empty.text')}</p>
         </div>
       </Card>
     );
@@ -79,55 +49,55 @@ function RequestCard({ m }: { m: StitchSureModel }) {
   const sentAt = [...state.events].reverse().find(e => e.title.endsWith('change requested'))?.at;
   const pending = r.status === 'Pending';
   const wanted = requestedLabel(r);
-  const wantSleeve = r.part === 'Sleeve' ? wanted : state.sleeve;
-  const wantNeck = r.part === 'Neckline' ? wanted : state.neckline;
   return (
-    <Card title="What they want" step="2" className="ss-hcard" aside={<Chip status={r.status === 'Pending' ? 'Waiting for you' : r.status} />}>
-      <p className="ss-ask"><span>{r.part}</span> → <strong>{wanted}</strong></p>
-      {sentAt && <p className="ss-meta">Requested {sentAt}</p>}
-      <div className="ss-hbody">
-      <div>
+    <Card title={t('tailor.request.title')} aside={<Chip status={pending ? (r.outcome ? 'Waiting for the customer' : 'Waiting for you') : r.status} />}>
+      <p className="ss-ask"><span>{t(`part.${r.part}`)}:</span> <strong>{term(wanted)}</strong></p>
+      {sentAt && <p className="ss-meta">{t('tailor.sentAt', { at: sentAt })}</p>}
       {pending && (
-        <div className="ss-compare" role="group" aria-label="Current design compared with the requested design">
-          <figure><Garment small sleeve={state.sleeve} neckline={state.neckline} part={r.part} /><figcaption><span>Now · Version {state.version}</span><strong>{r.part === 'Sleeve' ? state.sleeve : state.neckline}</strong></figcaption></figure>
-          <ArrowRight aria-hidden className="ss-compare-arrow" />
-          <figure><Garment small sleeve={wantSleeve} neckline={wantNeck} part={r.part} /><figcaption><span>Requested</span><strong>{wanted}</strong></figcaption></figure>
+        <div className="ss-compare" role="group" aria-label={t('tailor.compare')}>
+          <figure><Garment small sleeve={state.sleeve} neckline={state.neckline} part={r.part} /><figcaption><span>{t('tailor.now', { version: state.version })}</span><strong>{term(r.part === 'Sleeve' ? state.sleeve : state.neckline)}</strong></figcaption></figure>
+          <ArrowRight aria-hidden className="ss-compare-arrow ss-flip" />
+          <figure><Garment small sleeve={r.part === 'Sleeve' ? wanted : state.sleeve} neckline={r.part === 'Neckline' ? wanted : state.neckline} part={r.part} /><figcaption><span>{t('tailor.requested')}</span><strong>{term(wanted)}</strong></figcaption></figure>
         </div>
       )}
-      </div>
-      <div>
-      <h3 className="ss-subhead">Customer’s note</h3>
-      {r.note ? <blockquote className="ss-quote">“{r.note}”</blockquote> : <p className="ss-meta">No note added.</p>}
-      {r.answer && <><h3 className="ss-subhead">Her reply to your question</h3><blockquote className="ss-quote">“{r.answer}”</blockquote></>}
-      <h3 className="ss-subhead">Reference</h3>
-      {r.reference ? <div className="ss-ref"><span className="ss-ref-thumb" aria-hidden><Garment small sleeve={r.part === 'Sleeve' ? r.style : 'Straight sleeve'} neckline={r.part === 'Neckline' ? r.style : 'Round neckline'} label="" /></span><span><strong>{r.part === 'Sleeve' ? 'bell-sleeve' : 'neckline'}-reference.jpg</strong><small>Sample attachment (simulated upload)</small></span></div> : <p className="ss-meta">No reference attached.</p>}
+      <h3 className="ss-subhead">{t('tailor.note')}</h3>
+      {r.note ? <blockquote className="ss-quote">“{r.note}”</blockquote> : <p className="ss-meta">{t('waiting.noNote')}</p>}
+      {r.answer && <><h3 className="ss-subhead">{t('tailor.reply')}</h3><blockquote className="ss-quote">“{r.answer}”</blockquote></>}
+      <h3 className="ss-subhead">{t('tailor.photo')}</h3>
+      {r.reference
+        ? <div className="ss-ref"><span className="ss-ref-thumb" aria-hidden><Garment small sleeve={r.part === 'Sleeve' ? wanted : 'Straight sleeve'} neckline={r.part === 'Neckline' ? wanted : 'Round neckline'} /></span><span><strong><bdi dir="ltr">{r.part === 'Sleeve' ? 'sleeve' : 'neckline'}-reference.jpg</bdi></strong><small>{t('tailor.photoSample')}</small></span></div>
+        : <p className="ss-meta">{t('tailor.noPhoto')}</p>}
       {pending && (
         <div className="ss-seen">
           {r.seen
-            ? <p><Eye aria-hidden /> Seen. <strong>Still waiting for your review</strong>: seen is not the same as accepted.</p>
-            : <><p><Eye aria-hidden /> Not opened yet.</p><Button variant="outline" disabled={busy} onClick={decide.markSeen}>Mark as seen</Button></>}
+            ? <p><Eye aria-hidden />{t('tailor.seen')}</p>
+            : <><p><Eye aria-hidden />{t('tailor.notSeen')}</p><Button variant="outline" disabled={busy} onClick={decide.markSeen}>{t('tailor.markSeen')}</Button></>}
         </div>
       )}
-      </div>
-      </div>
     </Card>
   );
 }
 
 function ReviewCard({ m }: { m: StitchSureModel }) {
   const { state, dispatch, review, busy } = m;
-  const r = state.request;
-  if (!r) return <Card title="Your review" step="3" focusTarget><p className="ss-meta">Nothing to review yet.</p></Card>;
-  if (r.status !== 'Pending') return <Card title="Your review" step="3" focusTarget aside={<Chip status={r.status === 'Rejected' ? 'Declined' : r.status} />}><p className="ss-meta">{r.status === 'Approved' ? `Areeba approved this. Version ${state.version} is now the only version Shayan sees.` : 'Areeba kept her original design. Nothing changes for Shayan.'}</p></Card>;
-  if (r.outcome) {
+  const r = state.request!;
+  if (r.status !== 'Pending') {
     return (
-      <Card title="Your review" step="3" focusTarget aside={<Chip status="Pending" />}>
-        <p className="ss-meta">{r.outcome === 'Needs clarification' ? 'Question sent. Waiting for Areeba to reply.' : 'Sent. The request stays open until Areeba decides.'}</p>
-        <Facts label="What you sent" rows={[
-          { label: 'Outcome', value: outcomeLabel[r.outcome] },
-          { label: r.outcome === 'Needs clarification' ? 'Question' : 'Reason', value: r.reason || 'None' },
-          ...(r.alternative ? [{ label: 'Alternative', value: r.alternative }] : []),
-          ...(r.outcome !== 'Needs clarification' ? [{ label: 'Cost', value: r.cost ?? '' }, { label: 'Delivery', value: r.date ?? '' }] : []),
+      <Card title={t('review.title')} focusTarget aside={<Chip status={r.status === 'Rejected' ? 'Declined' : 'Approved'} />}>
+        <p className="ss-meta">{r.status === 'Approved' ? t('review.approved', { version: state.version }) : t('review.declined')}</p>
+      </Card>
+    );
+  }
+  if (r.outcome) {
+    const ask = r.outcome === 'Needs clarification';
+    return (
+      <Card title={t('review.title')} focusTarget aside={<Chip status="Pending" />}>
+        <p className="ss-meta">{t(ask ? 'review.waitingReply' : 'review.waitingDecision')}</p>
+        <Facts label={t('review.sentLabel')} rows={[
+          { label: t('review.field.outcome'), value: t(`outcome.${r.outcome}`) },
+          { label: t(ask ? 'review.field.question' : 'review.field.reason'), value: r.reason || t('fact.none') },
+          ...(r.alternative ? [{ label: t('review.field.alternative'), value: term(r.alternative) }] : []),
+          ...(ask ? [] : [{ label: t('review.field.cost'), value: r.cost ?? '' }, { label: t('review.field.delivery'), value: r.date ?? '' }]),
         ]} />
       </Card>
     );
@@ -135,33 +105,69 @@ function ReviewCard({ m }: { m: StitchSureModel }) {
   const cutAdvisory = state.stage !== 'Not cut' && r.style === 'Bell sleeves';
   const o = review.outcome;
   const ask = o === 'Needs clarification';
-  const reasonLabel = o === 'Impossible' ? 'Reason it cannot be made (required)' : 'Note for Areeba (optional)';
   return (
-    <Card title="Your review" step="3" focusTarget aside={<Chip status="Pending" />}>
-      <Segmented legend="Production stage" value={state.stage} options={STAGES} disabled={busy} onChange={v => dispatch({ type: 'stage', stage: v })} />
-      <p className="ss-hint">Cutting and stitching limit which changes are still possible.</p>
-      {cutAdvisory && <Notice tone="info">Fabric is already cut. Bell sleeves usually can’t be made now. Consider offering Cuff Trim.</Notice>}
+    <section className="ss-card" aria-labelledby="review-title">
+      <header className="ss-card-head"><h2 id="review-title" {...focusProps(true)}>{t('review.title')}</h2></header>
+      {cutAdvisory && <Notice tone="info">{t('stage.cutAdvisory')}</Notice>}
       <ErrorSlot state={state} />
-      <Segmented legend="Can this be made?" value={o} options={OUTCOMES} disabled={busy} onChange={review.setOutcome} />
-      <p className="ss-hint">{o ? outcomeHelp[o] : 'Choose one to continue. Nothing is selected for you.'}</p>
-      {!o ? null : ask
-        ? <Field label="Your question to the customer" htmlFor="review-question"><Textarea id="review-question" rows={3} value={review.question} onChange={e => review.setQuestion(e.target.value)} /></Field>
-        : <Field label={reasonLabel} htmlFor="review-reason"><Textarea id="review-reason" rows={3} value={review.reason} onChange={e => review.setReason(e.target.value)} /></Field>}
-      {o === 'Impossible' && <Field label="Offer this instead (required)" htmlFor="review-alt"><Input id="review-alt" value={review.alternative} onChange={e => review.setAlternative(e.target.value)} /></Field>}
+      <OptionList<Outcome> legend={t('review.question.legend')} value={o} disabled={busy} options={OUTCOMES.map(value => ({ value, label: t(`outcome.${value}`) }))} onChange={review.setOutcome} />
+      <p className="ss-hint" id="review-help">{o ? t(`outcome.help.${o}`) : t('review.choose')}</p>
+      {o && ask && <Field label={t('review.question')} htmlFor="review-question"><Textarea id="review-question" rows={3} value={review.question} onChange={e => review.setQuestion(e.target.value)} /></Field>}
+      {o && !ask && <Field label={t(o === 'Impossible' ? 'review.reason' : 'review.noteOptional')} htmlFor="review-reason"><Textarea id="review-reason" rows={3} value={review.reason} onChange={e => review.setReason(e.target.value)} /></Field>}
+      {o === 'Impossible' && <Field label={t('review.alternative')} htmlFor="review-alt"><Input id="review-alt" value={review.alternative} onChange={e => review.setAlternative(e.target.value)} /></Field>}
       {o && !ask && (
         <div className="ss-two">
-          <Field label="Cost effect" htmlFor="review-cost"><Input id="review-cost" value={review.cost} onChange={e => review.setCost(e.target.value)} /></Field>
-          <Field label="Delivery effect" htmlFor="review-date"><Input id="review-date" value={review.date} onChange={e => review.setDate(e.target.value)} /></Field>
+          <Field label={t('review.cost')} htmlFor="review-cost"><Input id="review-cost" value={review.cost} onChange={e => review.setCost(e.target.value)} /></Field>
+          <Field label={t('review.date')} htmlFor="review-date"><Input id="review-date" value={review.date} onChange={e => review.setDate(e.target.value)} /></Field>
         </div>
       )}
-      {o && (<>
-      <div className="ss-preview" aria-label="What Areeba will see">
-        <span>Areeba will see</span>
-        <p>{ask ? <>Question: <strong>{review.question || '…'}</strong></> : <><strong>{requestedLabel(r)}</strong>: {outcomeLabel[o]}{o === 'Impossible' && review.alternative ? ` · Offer: ${review.alternative}` : ''} · {review.cost || 'cost?'} · {review.date || 'delivery?'}</>}</p>
-      </div>
-      <div className="ss-np"><span className="ss-np-label">In-app notice to Areeba (sample, nothing is really sent)</span><p className="ss-np-bubble">{noticeText({ part: r.part, style: requestedLabel(r), outcome: o, reason: ask ? review.question : review.reason, alternative: review.alternative, cost: review.cost, date: review.date })}</p></div>
-      </>)}
-      <div className="ss-actions"><Button disabled={busy || !o} onClick={review.sendReview}><Send />{ask ? 'Send question' : 'Send review to customer'}</Button></div>
+      {o && (
+        <div className="ss-np">
+          <span className="ss-np-label">{t('review.preview')}</span>
+          <p className="ss-np-bubble">{noticeText({ part: r.part, style: requestedLabel(r), outcome: o, reason: ask ? review.question : review.reason, alternative: review.alternative, cost: review.cost, date: review.date })}</p>
+          <p className="ss-hint">{t('review.simulated')}</p>
+        </div>
+      )}
+      <div className="ss-actions"><Button size="lg" className="ss-wide" disabled={busy || !o} aria-describedby="review-help" onClick={review.sendReview}><Send className="ss-flip" aria-hidden />{t(ask ? 'review.sendQuestion' : 'review.send')}</Button></div>
+      <Disclosure label={t('stage.summary', { stage: term(state.stage) })}>
+        <Segmented<ProductionStage> legend={t('stage.legend')} value={state.stage} options={STAGES.map(value => ({ value, label: term(value) }))} disabled={busy} onChange={stage => dispatch({ type: 'stage', stage })} />
+        <p className="ss-hint">{t('stage.hint')}</p>
+      </Disclosure>
+    </section>
+  );
+}
+
+/** Secondary information, closed until asked for. */
+function MoreCard({ m }: { m: StitchSureModel }) {
+  const { state } = m;
+  const part = state.request?.part;
+  const key = part ? RELEVANT_MEASUREMENT[part] : undefined;
+  return (
+    <Card title={t('tailor.more')}>
+      <Disclosure label={t('tailor.customer')}>
+        <div className="ss-person">
+          <Avatar initials={CUSTOMER.initials} />
+          <div>
+            <h3>{CUSTOMER.name}</h3>
+            <p>{term(CUSTOMER.since)}</p>
+            <p>{term(CUSTOMER.contact)}</p>
+          </div>
+        </div>
+        <Facts label={t('tailor.customer')} rows={[
+          { label: t('detail.order'), value: <><bdi dir="ltr">{ORDER.id}</bdi> · {term(ORDER.garment)}</> },
+          { label: t('fact.fabric'), value: term(ORDER.fabric) },
+          { label: t('tile.stage'), value: term(state.stage) },
+          { label: t('tile.agreed'), value: t('version.n', { version: state.version }) },
+          { label: t('detail.placed'), value: <bdi dir="ltr">{ORDER.placed}</bdi> },
+          { label: t('tile.delivery'), value: <bdi dir="ltr">{ORDER.delivery}</bdi> },
+          { label: t('fact.neededFor'), value: <>{term(ORDER.event)} · <bdi dir="ltr">{ORDER.eventDate}</bdi></> },
+        ]} />
+        <p className="ss-hint">{t('tailor.sample')}</p>
+      </Disclosure>
+      <Disclosure label={t('measurements.title')}>
+        <Facts label={t('measurements.title')} rows={CUSTOMER.measurements.map(x => ({ label: term(x.label), value: <bdi dir="ltr">{x.value}</bdi>, flag: x.label === key ? t('tailor.relevant') : undefined }))} />
+      </Disclosure>
+      <Disclosure label={t('tailor.history')}><Timeline events={state.events} /></Disclosure>
     </Card>
   );
 }
