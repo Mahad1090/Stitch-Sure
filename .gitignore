@@ -150,3 +150,9 @@ vite.config.ts.timestamp-*
 
 # Local build and deploy output
 .wrangler/
+
+# Local-only files, not to be pushed
+/D5_PartA_findings.txt
+/D5_evidence/
+/D5_evidence_new/
+/D5_screenshots.zip
