@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { initialWorkflow, workflowReducer, type Action, type Outcome, type Part, type Role } from '@/lib/workflow';
+import { formatStamp } from '@/lib/dates';
+import { DESCRIBED, createInitialWorkflow, workflowReducer, type Action, type Outcome, type Part, type Role } from '@/lib/workflow';
 
-const stamp = () => new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+const stamp = () => formatStamp(new Date());
+/** Longest note a customer can type (D5A M-25). */
+export const NOTE_LIMIT = 250;
 
 /** The tailor decides every value: nothing is pre-filled (D5A S-01, S-05, A-18). */
 const BLANK_REVIEW = { outcome: '' as Outcome | '', reason: '', question: '', alternative: '', cost: '', date: '' };
 
-export type CustomerScreen = 'home' | 'form' | 'order' | 'message';
+/** `home` shows the task in progress if there is one; `choices` always shows the three choices. */
+export type CustomerScreen = 'home' | 'choices' | 'form' | 'order' | 'message';
 export type FormStep = 1 | 2 | 3;
 
 /** All screen state and handlers. The workflow rules themselves live in `lib/workflow.ts`. */
 export function useStitchSure() {
-  const [state, dispatch] = useReducer(workflowReducer, initialWorkflow);
+  const [state, dispatch] = useReducer(workflowReducer, undefined, () => createInitialWorkflow());
 
   const [role, setRole] = useState<Role>('customer');
   const [navOpen, setNavOpen] = useState(false);
@@ -42,6 +46,11 @@ export function useStitchSure() {
   const [reportOpen, setReportOpen] = useState(false);
   const [problemKind, setProblemKind] = useState('');
   const [problem, setProblem] = useState('');
+  const [reply, setReply] = useState('');
+
+  // Opening the tailor view is seeing the request: no extra button (D5A M-17).
+  const unseen = role === 'tailor' && state.request?.status === 'Pending' && !state.request.seen;
+  useEffect(() => { if (unseen) dispatch({ type: 'seen' }); }, [unseen]);
 
   // A confirmation message belongs to the person who acted, so hide it once the view switches role.
   const [hiddenNote, setHiddenNote] = useState('');
@@ -49,8 +58,9 @@ export function useStitchSure() {
   const noteRef = useRef('');
   noteRef.current = noteText;
   const banner = noteText && noteText !== hiddenNote ? noteText : '';
+  const lastRole = useRef<Role>('customer');
   const switchRole = useCallback((r: Role) => {
-    setHiddenNote(noteRef.current); setRole(r); setNavOpen(false);
+    setHiddenNote(noteRef.current); setRole(previous => { if (previous !== r) lastRole.current = previous; return r; }); setNavOpen(false);
     setScreen(s => (s === 'form' ? s : 'home'));
   }, []);
 
@@ -62,7 +72,7 @@ export function useStitchSure() {
 
   const choosePart = (p: Part) => {
     if (p === part) return;
-    setPart(p); setStyle('');
+    setPart(p); setStyle(p === 'Other' ? DESCRIBED : '');
   };
 
   const sendRequest = () => {
@@ -87,7 +97,6 @@ export function useStitchSure() {
   const approve = () => { dispatch({ type: 'approve', at: stamp() }); setShowApproved(true); };
   const undoApproval = () => { dispatch({ type: 'undo', at: stamp() }); setShowApproved(false); };
   const keepOriginal = () => dispatch({ type: 'reject', at: stamp() });
-  const markSeen = () => dispatch({ type: 'seen' });
   const sendReport = () => {
     const action: Action = { type: 'conflict', kind: problemKind, reason: problem, at: stamp() };
     const next = workflowReducer(state, action);
@@ -95,21 +104,36 @@ export function useStitchSure() {
     if (!state.paused && next.paused) { setReportOpen(false); setProblem(''); setProblemKind(''); }
   };
   const finish = () => dispatch({ type: 'finish', at: stamp() });
-  const resolveProblem = () => dispatch({ type: 'resolve', at: stamp() });
+  const resolveProblem = () => { dispatch({ type: 'resolve', reply, at: stamp() }); setReply(''); };
 
   const reset = () => {
     dispatch({ type: 'reset' });
     setRole('customer'); setScreen('home'); setStep(1); setShowApproved(false); setConfirmCancel(false); setAnswer('');
     setPart(''); setStyle(''); setNote(''); setReference(false);
-    setReportOpen(false); setProblem(''); setProblemKind('');
+    setReportOpen(false); setProblem(''); setProblemKind(''); setReply('');
     setDraft(BLANK_REVIEW);
   };
 
   /** True while a request needs someone's attention, so progress and history are worth showing. */
   const inProgress = state.request?.status === 'Pending' || (showApproved && state.request?.status === 'Approved');
 
+  /**
+   * Where the back button leads from this screen, or nothing on the starting screen.
+   * It only moves between screens: it never changes the order.
+   */
+  const back = (): (() => void) | undefined => {
+    if (role === 'worker' && reportOpen) return () => setReportOpen(false);
+    if (role !== 'customer') return () => switchRole(lastRole.current === role ? 'customer' : lastRole.current);
+    const pending = state.request?.status === 'Pending';
+    if (screen === 'order' || screen === 'message' || screen === 'form') return () => go('home');
+    if (screen === 'choices') return pending ? () => go('home') : undefined;
+    if (pending) return () => go('choices');
+    if (showApproved && state.request?.status === 'Approved') return () => { setShowApproved(false); go('home'); };
+    return undefined;
+  };
+
   return {
-    state, dispatch, role, chooseRole: switchRole, navOpen, setNavOpen, banner, busy: sending, sending,
+    back: back(), state, dispatch, role, chooseRole: switchRole, navOpen, setNavOpen, banner, busy: sending, sending,
     customer: { screen, go, openForm, inProgress, confirmCancel, setConfirmCancel, cancelRequest, answer, setAnswer, sendAnswer, showApproved, setShowApproved },
     form: { step, setStep, part, style, setStyle, note, setNote, reference, setReference, choosePart, sendRequest },
     review: {
@@ -122,8 +146,8 @@ export function useStitchSure() {
       setCost: (cost: string) => edit({ cost }),
       setDate: (date: string) => edit({ date }),
     },
-    decide: { approve, undoApproval, keepOriginal, markSeen },
-    worker: { reportOpen, setReportOpen, problemKind, setProblemKind, problem, setProblem, sendReport, finish, resolveProblem },
+    decide: { approve, undoApproval, keepOriginal },
+    worker: { reportOpen, setReportOpen, problemKind, setProblemKind, problem, setProblem, sendReport, finish, reply, setReply, resolveProblem },
     reset,
   };
 }

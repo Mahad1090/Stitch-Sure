@@ -1,13 +1,15 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft, Check, ClipboardList, LoaderCircle, MessageSquare, PencilRuler, Send, Upload, Undo2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { CUSTOMER, ORDER, STYLE_OPTIONS } from '@/lib/sample';
+import { CUSTOMER, ORDER, PARTS, STYLE_OPTIONS } from '@/lib/sample';
 import { useLang } from '@/lib/i18n';
-import { DESCRIBED, requestedLabel, type Part } from '@/lib/workflow';
-import { Card, Chip, Disclosure, ErrorSlot, Facts, Field, Notice, OptionList, UndoNotice, focusProps } from './ui';
+import { DESCRIBED, EXTRA_PARTS, designOf, requestedLabel, withDesign, type Part } from '@/lib/workflow';
+import { Card, Chip, Disclosure, ErrorSlot, Facts, Field, LongText, Notice, OptionList, StepRail, UndoNotice, focusProps } from './ui';
+import { Timeline } from './Activity';
+import { activeStep } from '@/lib/status';
 import { Garment } from './Garment';
-import type { FormStep, StitchSureModel } from './useStitchSure';
+import { NOTE_LIMIT, type FormStep, type StitchSureModel } from './useStitchSure';
 
 /** Customer portal. One card at a time, chosen by whose turn it is, so there is always one clear next step. */
 export function CustomerView({ m }: { m: StitchSureModel }) {
@@ -15,6 +17,7 @@ export function CustomerView({ m }: { m: StitchSureModel }) {
   const r = state.request;
   if (customer.screen === 'order') return <OrderScreen m={m} />;
   if (customer.screen === 'message') return <MessageCard m={m} />;
+  if (customer.screen === 'choices') return <HomeCard m={m} />;
   if (r?.status === 'Pending') {
     if (!r.outcome) return <WaitingCard m={m} />;
     if (r.outcome === 'Needs clarification') return <QuestionCard m={m} />;
@@ -23,11 +26,6 @@ export function CustomerView({ m }: { m: StitchSureModel }) {
   if (customer.showApproved && r?.status === 'Approved') return <ApprovedCard m={m} />;
   if (customer.screen === 'form') return <RequestForm m={m} />;
   return <HomeCard m={m} />;
-}
-
-function BackLink({ m, label }: { m: StitchSureModel; label?: string }) {
-  const { t } = useLang();
-  return <Button variant="link" className="ss-link" disabled={m.busy} onClick={() => m.customer.go('home')}><ArrowLeft className="ss-flip" aria-hidden />{label ?? t('back.choices')}</Button>;
 }
 
 function SeeOrder({ m }: { m: StitchSureModel }) {
@@ -39,21 +37,24 @@ function SeeOrder({ m }: { m: StitchSureModel }) {
 function HomeCard({ m }: { m: StitchSureModel }) {
   const { t, term } = useLang();
   const { state, customer, decide, busy } = m;
-  const locked = state.stitching || state.paused;
+  const waiting = state.request?.status === 'Pending';
+  const locked = state.stitching || state.paused || waiting;
   return (
     <Card title={t('home.title')} focusTarget className="ss-narrow">
       {state.undo && !state.stitching && !state.finished && <UndoNotice disabled={busy} onUndo={decide.undoApproval} />}
       <div className="ss-summary">
-        <Garment small sleeve={state.sleeve} neckline={state.neckline} />
+        <Garment small sleeve={state.sleeve} neckline={state.neckline} extras={state.extras} />
         <Facts label={t('home.agreed')} rows={[
           { label: t('fact.sleeve'), value: term(state.sleeve) },
           { label: t('fact.neckline'), value: term(state.neckline) },
+          ...EXTRA_PARTS.filter(p => state.extras[p]).map(p => ({ label: t(`part.${p}`), value: term(state.extras[p]!) })),
           { label: t('fact.due'), value: <bdi dir="ltr">{ORDER.delivery}</bdi> },
         ]} />
       </div>
       <ul className="ss-choices">
+        {waiting && <li><Choice id="request" icon={<Send className="ss-flip" aria-hidden />} title={t('waiting.title')} help={t('home.request.help')} onClick={() => customer.go('home')} /></li>}
         <li>
-          <Choice id="change" icon={<PencilRuler aria-hidden />} title={t('home.change')} help={locked ? t(state.stitching ? 'home.change.locked' : 'home.change.paused') : t('home.change.help')} locked={locked} onClick={customer.openForm} />
+          <Choice id="change" icon={<PencilRuler aria-hidden />} title={t('home.change')} help={locked ? t(state.stitching ? 'home.change.locked' : state.paused ? 'home.change.paused' : 'home.change.waiting') : t('home.change.help')} locked={locked} onClick={customer.openForm} />
         </li>
         <li><Choice id="order" icon={<ClipboardList aria-hidden />} title={t('home.order')} help={t('home.order.help')} onClick={() => customer.go('order')} /></li>
         <li><Choice id="message" icon={<MessageSquare aria-hidden />} title={t('home.message')} help={t('home.message.help')} onClick={() => customer.go('message')} /></li>
@@ -65,52 +66,62 @@ function HomeCard({ m }: { m: StitchSureModel }) {
 /** A large choice button. A locked one stays focusable, so keyboard users can read why. */
 function Choice({ id, icon, title, help, locked, onClick }: { id: string; icon: ReactNode; title: string; help: string; locked?: boolean; onClick: () => void }) {
   return (
-    <button type="button" className="ss-choice" aria-disabled={locked || undefined} aria-labelledby={`choice-${id}`} aria-describedby={`choice-${id}-help`} onClick={() => { if (!locked) onClick(); }}>
+    <button type="button" className="ss-choice" data-choice={id} aria-disabled={locked || undefined} onClick={() => { if (!locked) onClick(); }}>
       <span className="ss-choice-icon">{icon}</span>
-      <span className="ss-choice-text"><strong id={`choice-${id}`}>{title}</strong><small id={`choice-${id}-help`}>{help}</small></span>
+      {/* The name is the whole visible text, so voice users can say what they see (WCAG 2.5.3). */}
+      <span className="ss-choice-text"><strong>{title}</strong> <small>{help}</small></span>
     </button>
   );
 }
 
-/** C6 / C7: design details and history, only when asked for. */
+/** C6 / C7: the same single, quiet card as "Change my design". The design reads first; the rest is on request. */
 function OrderScreen({ m }: { m: StitchSureModel }) {
   const { t, term, msg } = useLang();
   const { state, customer } = m;
   const r = state.request;
+  const approved = r?.status === 'Approved';
   const earlier = state.events.filter(e => e.status === 'Superseded');
   return (
-    <div className="ss-stack">
-      <BackLink m={m} label={customer.inProgress ? t('back.request') : t('back.choices')} />
-      <Card title={t('orderScreen.title')} focusTarget aside={<Chip status="Agreed" version={state.version} />}>
-        <div className="ss-job">
-          <Garment sleeve={state.sleeve} neckline={state.neckline} />
-          <Facts label={t('orderScreen.title')} rows={[
-            { label: t('fact.sleeve'), value: term(state.sleeve) },
-            { label: t('fact.neckline'), value: term(state.neckline) },
-            { label: t('fact.fabric'), value: term(ORDER.fabric) },
-            { label: t('fact.reference'), value: r?.reference && r.status === 'Approved' ? t('fact.referenceFile') : t('fact.none') },
-            { label: t('fact.note'), value: r?.status === 'Approved' && r.note ? <bdi>“{r.note}”</bdi> : t('fact.none') },
-            { label: t('fact.due'), value: <bdi dir="ltr">{ORDER.delivery}</bdi> },
+    <Card title={t('orderScreen.title')} focusTarget className="ss-narrow" aside={<Chip status="Agreed" version={state.version} />}>
+      <Garment sleeve={state.sleeve} neckline={state.neckline} extras={state.extras} />
+      <div className="ss-order-facts">
+        <Facts label={t('orderScreen.title')} rows={[
+          { label: t('fact.sleeve'), value: term(state.sleeve) },
+          { label: t('fact.neckline'), value: term(state.neckline) },
+          ...EXTRA_PARTS.filter(p => state.extras[p]).map(p => ({ label: t(`part.${p}`), value: term(state.extras[p]!) })),
+          { label: t('fact.fabric'), value: term(ORDER.fabric) },
+          { label: t('fact.due'), value: <bdi dir="ltr">{ORDER.delivery}</bdi> },
+        ]} />
+      </div>
+      <div className="ss-secondary">
+        <Disclosure label={t('order.more')}>
+          <Facts label={t('order.more')} rows={[
+            { label: t('tile.stage'), value: term(state.stage) },
             { label: t('fact.neededFor'), value: <>{term(ORDER.event)}, <bdi dir="ltr">{ORDER.eventDate}</bdi></> },
+            { label: t('fact.reference'), value: r?.reference && approved ? t('fact.referenceFile') : t('fact.none') },
+            { label: t('fact.note'), value: approved && r.note ? <LongText text={`“${r.note}”`} /> : t('fact.none') },
           ]} />
-        </div>
+        </Disclosure>
         <Disclosure label={t('measurements.title')}>
           <Facts label={t('measurements.title')} rows={CUSTOMER.measurements.map(x => ({ label: term(x.label), value: <bdi dir="ltr">{x.value}</bdi> }))} />
         </Disclosure>
-      </Card>
-      <Card title={t('history.title')}>
-        <Disclosure label={t('history.earlier', { count: earlier.length })}>
-          {earlier.length
-            ? <ul className="ss-list">{earlier.map((e, i) => <li key={i}><s>{e.msg ? msg(e.msg.title) : e.title}</s> <span className="ss-meta">· {e.msg ? msg(e.msg.text) : e.text} · {t('history.replaced')}</span></li>)}</ul>
-            : <p className="ss-meta">{t('history.noEarlier')}</p>}
+        <Disclosure label={t('order.history')}>
+          <StepRail active={activeStep(state)} />
+          <Disclosure label={t('history.earlier', { count: earlier.length })}>
+            {earlier.length
+              ? <ul className="ss-list">{earlier.map((e, i) => <li key={i}><s>{e.msg ? msg(e.msg.title) : e.title}</s> <span className="ss-meta">· <LongText text={e.msg ? msg(e.msg.text) : e.text} /> · {t('history.replaced')}</span></li>)}</ul>
+              : <p className="ss-meta">{t('history.noEarlier')}</p>}
+          </Disclosure>
+          <Disclosure label={t('history.declined', { count: state.declined.length })}>
+            {state.declined.length
+              ? <ul className="ss-list">{state.declinedMsgs.map((d, i) => <li key={i}><LongText text={msg(d)} /></li>)}</ul>
+              : <p className="ss-meta">{t('history.noDeclined')}</p>}
+          </Disclosure>
+          <h3 className="ss-subhead">{t('timeline.title')}</h3>
+          <Timeline events={state.events} />
         </Disclosure>
-        <Disclosure label={t('history.declined', { count: state.declined.length })}>
-          {state.declined.length
-            ? <ul className="ss-list">{state.declinedMsgs.map((d, i) => <li key={i}>{msg(d)}</li>)}</ul>
-            : <p className="ss-meta">{t('history.noDeclined')}</p>}
-        </Disclosure>
-      </Card>
-    </div>
+      </div>
+    </Card>
   );
 }
 
@@ -121,7 +132,6 @@ function MessageCard({ m }: { m: StitchSureModel }) {
   const [sent, setSent] = useState(false);
   return (
     <Card title={t('message.title')} focusTarget className="ss-narrow">
-      <BackLink m={m} />
       <div role="status">{sent && <Notice tone="ok">{t('message.sent')}</Notice>}</div>
       {!sent && (
         <>
@@ -139,19 +149,27 @@ function RequestForm({ m }: { m: StitchSureModel }) {
   const { t, term } = useLang();
   const { state, form, sending, busy } = m;
   const { step, part, style } = form;
-  const current = part === 'Sleeve' ? state.sleeve : part === 'Neckline' ? state.neckline : '';
+  const current = part ? designOf(state, part) : '';
   const described = style === DESCRIBED;
-  const question = t(step === 1 ? 'form.q.part' : step === 2 ? 'form.q.style' : 'form.q.note');
-  const missing = step === 1 ? (!part && t('form.needPart')) : step === 2 ? (!style && t('form.needStyle')) : (described && !form.note.trim() && t('form.needNote'));
+  const question = t(step === 1 ? 'form.q.part' : step === 2 ? (part === 'Other' ? 'form.q.other' : 'form.q.style') : 'form.q.note');
+  const undescribed = described && !form.note.trim();
+  const missing = step === 1 ? (!part && t('form.needPart'))
+    : step === 2 ? (!style ? t('form.needStyle') : undescribed && t('form.needNoteNext'))
+    : (undescribed && t('form.needNote'));
   const styles = part
     ? [
         ...STYLE_OPTIONS[part].map(value => ({ value: value as string, label: value === current ? t('form.current', { style: term(value) }) : term(value), hint: t(`style.hint.${value}`) })),
         { value: DESCRIBED as string, label: t('style.describe'), hint: t('style.describe.hint') },
       ]
     : [];
+  const noteField = (chosen: Part) => (
+    <>
+      <Field label={t(described ? 'form.note.required' : 'form.note.optional')} htmlFor="req-note"><Textarea id="req-note" rows={3} maxLength={NOTE_LIMIT} aria-describedby="note-count" value={form.note} onChange={e => form.setNote(e.target.value)} placeholder={t(`form.note.${chosen}`)} /></Field>
+      <p className="ss-hint" id="note-count">{t('form.count', { count: form.note.length, limit: NOTE_LIMIT })}</p>
+    </>
+  );
   return (
     <Card title={t('form.title')} className="ss-narrow">
-      <BackLink m={m} />
       <p className="ss-stepcount" id="step-count">{t('form.step', { step })}</p>
       <div className="ss-progress" role="progressbar" aria-labelledby="step-count" aria-valuemin={0} aria-valuemax={3} aria-valuenow={step}><span style={{ inlineSize: `${(step / 3) * 100}%` }} /></div>
       {/* A new element per step, so focus lands on this step's heading. */}
@@ -160,22 +178,27 @@ function RequestForm({ m }: { m: StitchSureModel }) {
       {step === 1 && (
         <>
           <p className="ss-hint">{t('form.tapHint')}</p>
-          <Garment sleeve={state.sleeve} neckline={state.neckline} part={part} select={form.choosePart} />
-          <OptionList<Part> legend={question} hideLegend value={part} options={(['Sleeve', 'Neckline'] as const).map(p => ({ value: p, label: t(`part.${p}`), hint: term(p === 'Sleeve' ? state.sleeve : state.neckline) }))} onChange={form.choosePart} />
+          <Garment sleeve={state.sleeve} neckline={state.neckline} extras={state.extras} part={part} select={form.choosePart} />
+          <OptionList<Part> legend={question} hideLegend value={part} options={PARTS.map(p => ({ value: p, label: t(`part.${p}`), hint: p === 'Other' ? t('form.other.hint') : term(designOf(state, p)) }))} onChange={form.choosePart} />
+          {/* Feedback sits beside the control that changed (D5A S-09). */}
+          <p className="ss-hint" role="status">{part ? t('form.selected', { part: { term: part } }) : ''}</p>
         </>
       )}
-      {step === 2 && <OptionList legend={question} hideLegend value={style} options={styles} onChange={form.setStyle} />}
+      {/* "Other" as a part has nothing to pick from, so it goes straight to the writing box. */}
+      {step === 2 && part !== 'Other' && <OptionList legend={question} hideLegend value={style} options={styles} onChange={form.setStyle} />}
+      {/* The box appears as soon as "Other" is chosen, not a screen later. */}
+      {step === 2 && part && described && noteField(part)}
       {step === 3 && part && (
         <>
-          <Field label={t(described ? 'form.note.required' : 'form.note.optional')} htmlFor="req-note"><Textarea id="req-note" rows={3} value={form.note} onChange={e => form.setNote(e.target.value)} placeholder={t(`form.note.${part}`)} /></Field>
+          {noteField(part)}
           <div className="ss-attach">
             <Button variant="outline" disabled={busy} onClick={() => form.setReference(!form.reference)}>{form.reference ? <Check aria-hidden /> : <Upload aria-hidden />}{t(form.reference ? 'form.removePhoto' : 'form.addPhoto')}</Button>
             <span className="ss-meta" role="status">{t(form.reference ? 'form.photoAttached' : 'form.photoOptional')}</span>
           </div>
           <div className="ss-preview">
             <span>{t('form.asking')}</span>
-            <p><strong>{t(`part.${part}`)}: {term(current)} {t('arrow')} {described ? `“${form.note.trim() || '…'}”` : term(style)}</strong></p>
-            <p>{t('form.nothingChanges')}</p>
+            <RequestSummary part={part} wanted={described ? `“${form.note.trim() || '…'}”` : term(style)} current={current} />
+            <p className="ss-meta">{t('form.nothingChanges')}</p>
           </div>
         </>
       )}
@@ -190,17 +213,43 @@ function RequestForm({ m }: { m: StitchSureModel }) {
   );
 }
 
+/** What is being asked for, in two labelled lines: what it was, then what the customer wants. */
+function RequestSummary({ part, wanted, current }: { part: Part; wanted: string; current: string }) {
+  const { t, term } = useLang();
+  // "Other" has no part name or earlier design worth repeating: the customer's words say it all.
+  const other = part === 'Other';
+  return (
+    <div className="ss-request">
+      {!other && <p className="ss-request-part">{t(`part.${part}`)}</p>}
+      <dl>
+        {!other && <div><dt>{t('form.before')}</dt><dd>{term(current)}</dd></div>}
+        <div className="ss-wanted"><dt>{t('form.wanted')}</dt><dd><bdi>{wanted}</bdi></dd></div>
+      </dl>
+    </div>
+  );
+}
+
 /** C3: whose turn it is, and a way to back out (with confirmation). */
 function WaitingCard({ m }: { m: StitchSureModel }) {
   const { t, term } = useLang();
   const { state, customer, busy } = m;
   const r = state.request!;
+  const { confirmCancel, setConfirmCancel } = customer;
+  // Escape is the same as "No, keep request" (D5A M-21).
+  useEffect(() => {
+    if (!confirmCancel) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setConfirmCancel(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [confirmCancel, setConfirmCancel]);
   return (
-    <Card title={t('waiting.title')} focusTarget className="ss-narrow" aside={<Chip status="Waiting for the tailor" />}>
-      <p className="ss-ask"><span>{t(`part.${r.part}`)}:</span> {term(r.part === 'Sleeve' ? state.sleeve : state.neckline)} {t('arrow')} <strong>{term(requestedLabel(r))}</strong></p>
-      <p className="ss-meta">{r.note ? t('waiting.note', { note: r.note }) : t('waiting.noNote')}{r.reference ? ` · ${t('waiting.photo')}` : ''}</p>
+    <Card title={t('waiting.title')} focusTarget className="ss-narrow">
+      <RequestSummary part={r.part} wanted={term(requestedLabel(r))} current={designOf(state, r.part)} />
+      {/* A described request is the note itself, so it is not repeated. */}
+      {r.note && r.style !== DESCRIBED && <p className="ss-meta"><LongText text={t('waiting.note', { note: r.note })} /></p>}
+      {r.reference && <p className="ss-meta">{t('waiting.photo')}</p>}
       {r.answer && <p className="ss-meta">{t('waiting.reply', { answer: r.answer })}</p>}
-      <Notice tone="info">{t('waiting.same', { version: state.version })}</Notice>
+      <p className="ss-gap">{t('waiting.same')}</p>
       <ErrorSlot state={state} />
       {/* A safe control comes first in the Tab order, before anything destructive (D5A S-04). */}
       <Disclosure label={t('waiting.nextLabel')}><p className="ss-meta">{t('waiting.nextText')}</p></Disclosure>
@@ -258,7 +307,7 @@ function DecisionCard({ m }: { m: StitchSureModel }) {
         <h3>{term(offer)}</h3>
         <Chip status="Can be made" />
         {!impossible && r.reason && <p><bdi>{r.reason}</bdi></p>}
-        <figure className="ss-offer-preview"><Garment small sleeve={r.part === 'Sleeve' ? offer : state.sleeve} neckline={r.part === 'Neckline' ? offer : state.neckline} part={r.part} /><figcaption>{t('decision.preview', { style: term(offer) })}</figcaption></figure>
+        <figure className="ss-offer-preview"><Garment small {...withDesign(state, r.part, offer)} part={r.part} /><figcaption>{t('decision.preview', { style: term(offer) })}</figcaption></figure>
         <dl className="ss-effects">
           <div><dt>{t('decision.cost')}</dt><dd><bdi>{r.cost}</bdi></dd></div>
           <div><dt>{t('decision.dateChange')}</dt><dd><bdi>{unchanged ? t('fact.none') : r.date}</bdi></dd></div>
@@ -279,11 +328,11 @@ function DecisionCard({ m }: { m: StitchSureModel }) {
 function ApprovedCard({ m }: { m: StitchSureModel }) {
   const { t, term } = useLang();
   const { state, customer, decide, busy } = m;
-  const design = state.request?.part === 'Neckline' ? state.neckline : state.sleeve;
+  const design = designOf(state, state.request?.part ?? 'Sleeve');
   return (
     <Card title={t('approved.title', { style: term(design) })} focusTarget className="ss-narrow" aside={<Chip status="Approved" />}>
       <Notice tone="ok">{t('approved.notice', { version: state.version, old: state.version - 1 })}</Notice>
-      <p className="ss-gap"><strong>{t('approved.design')}</strong> {term(state.sleeve)} · {term(state.neckline)} · {t('order.due', { date: ORDER.delivery })}</p>
+      <p className="ss-gap"><strong>{t('approved.design')}</strong> {[state.sleeve, state.neckline, ...Object.values(state.extras)].map(term).join(' · ')} · {t('order.due', { date: ORDER.delivery })}</p>
       <p className="ss-meta">{t(state.stitching ? 'approved.started' : 'approved.notStarted')}</p>
       <ErrorSlot state={state} />
       <div className="ss-actions">

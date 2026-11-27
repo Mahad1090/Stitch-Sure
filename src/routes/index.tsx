@@ -1,13 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { Check, Clock3, FileCheck2, Menu, RotateCcw, Scissors } from 'lucide-react';
+import { ArrowLeft, Menu, RotateCcw, Scissors } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Activity } from '@/components/stitchsure/Activity';
 import { CustomerView } from '@/components/stitchsure/CustomerView';
 import { Drawer } from '@/components/stitchsure/Drawer';
 import { TailorView } from '@/components/stitchsure/TailorView';
 import { WorkerView } from '@/components/stitchsure/WorkerView';
-import { Avatar, Chip, Notice, Segmented, StepRail } from '@/components/stitchsure/ui';
+import { Avatar, Chip, Notice, Segmented, SkipLink, StepRail } from '@/components/stitchsure/ui';
 import { useStitchSure } from '@/components/stitchsure/useStitchSure';
 import { useMediaQuery, useScreenFocus } from '@/components/stitchsure/useScreen';
 import { ORDER, PERSONAS } from '@/lib/sample';
@@ -43,25 +42,22 @@ function StitchSure() {
   const { title, next } = describe(state, role, sending, lang);
   useScreenFocus(
     role,
-    [customer.screen, form.step, customer.showApproved, customer.confirmCancel, worker.reportOpen, r?.status, r?.outcome, r?.seen, r?.answer, state.version, state.stitching, state.finished, state.paused].join('|'),
+    [customer.screen, form.step, customer.showApproved, customer.confirmCancel, worker.reportOpen, r?.status, r?.outcome, r?.answer, state.version, state.stitching, state.finished, state.paused].join('|'),
     Boolean(state.error) || customer.confirmCancel,
   );
   const phone = useMediaQuery('(max-width: 700px)');
 
-  // Progress, facts and history appear only when they help (calm home screen).
-  const detail = role === 'customer' && (customer.screen === 'order' || (customer.screen === 'home' && customer.inProgress));
-  const showRail = detail || (role === 'tailor' && Boolean(r));
-  const calm = role === 'worker' || (role === 'customer' && !detail);
+  // Progress shows only while a request needs attention. History and facts live under "See my order".
+  const showRail = role === 'customer' ? customer.screen === 'home' && customer.inProgress : role === 'tailor' && Boolean(r);
+  const calm = role !== 'tailor';
+  // The waiting screen's title already says the request was sent.
+  const waiting = role === 'customer' && r?.status === 'Pending' && !r.outcome;
   const turnNow = turn(state, role);
+  // One back button beside the status banner, on every screen that has somewhere to go back to.
+  const { back } = m;
+  const backLabel = t('back.go');
 
   const rail = showRail && <StepRail key="rail" active={activeStep(state)} />;
-  const tiles = detail && (
-    <ul key="tiles" className="ss-tiles" aria-label={t('order.facts')}>
-      <li><Clock3 aria-hidden /><span>{t('tile.stage')}</span><strong>{term(state.stage)}</strong></li>
-      <li><FileCheck2 aria-hidden /><span>{t('tile.agreed')}</span><strong>{t('version.n', { version: state.version })}</strong></li>
-      <li><Check aria-hidden /><span>{t('tile.delivery')}</span><strong><bdi dir="ltr">{ORDER.delivery}</bdi></strong><small>{t('tile.deliveryNote')}</small></li>
-    </ul>
-  );
   const task = (
     <div key="task" className="ss-task">
       {role === 'customer' && <CustomerView m={m} />}
@@ -71,6 +67,7 @@ function StitchSure() {
   );
   return (
     <div className="ss-app">
+      <div inert={navOpen}><SkipLink /></div>
       <div className="ss-demo" role="region" aria-label={t('demo.region')} inert={navOpen}>
         <span className="ss-demo-tag">{t('demo.tag')}</span>
         <Segmented<Role> className="ss-roles" legend={t('demo.viewAs')} value={role} options={ROLES.map(value => ({ value, label: t(`role.${value}`) }))} disabled={busy} onChange={m.chooseRole} />
@@ -90,21 +87,23 @@ function StitchSure() {
 
       {navOpen && <Drawer m={m} />}
 
-      <div className={detail ? 'ss-shell has-activity' : 'ss-shell'} inert={navOpen}>
-        <main id="main" className="ss-main">
+      <div className="ss-shell" inert={navOpen}>
+        <main id="main" tabIndex={-1} className="ss-main">
+          <div className={back ? 'ss-hero-row has-back' : 'ss-hero-row'}>
+          {back && <Button variant="outline" size="icon" className="ss-back" aria-label={backLabel} title={backLabel} disabled={busy} onClick={back}><ArrowLeft className="ss-flip" aria-hidden /></Button>}
           <section className="ss-hero" aria-label={t('order.status')}>
             {!calm && turnNow && <div className="ss-hero-chip"><Chip status={turnNow} /></div>}
             <h1 aria-live="polite">{title}</h1>
             {!calm && <p className="ss-next">{next}</p>}
             <div aria-live="polite" aria-atomic="true">{/* The finished job card already says this. */}
-              {banner && !(role === 'worker' && state.finished) && <Notice tone="ok">{state.messageMsg ? msg(state.messageMsg) : banner}</Notice>}</div>
+              {banner && !waiting && !(role === 'worker' && state.finished) && <Notice tone="ok">{state.messageMsg ? msg(state.messageMsg) : banner}</Notice>}</div>
           </section>
+          </div>
 
           {/* On phones the task comes straight after the status banner (D5A M-26). */}
-          {phone ? [task, rail, tiles] : [rail, tiles, task]}
+          {phone ? [task, rail] : [rail, task]}
         </main>
 
-        {detail && <Activity events={state.events} />}
       </div>
     </div>
   );

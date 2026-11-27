@@ -15,13 +15,17 @@ describe("Theme", () => {
     expect(css).toMatch(/--input:\s*#5b6b82/);
   });
 
-  it("uses the team's blue for accents and the darker shade for text controls", () => {
-    expect(css).toMatch(/--brand:\s*#038fc5/);
-    expect(css).toMatch(/--primary:\s*#02739f/);
+  it("uses the team's rose: accents, solid rose fill with dark text, deep links", () => {
+    expect(css).toMatch(/--brand:\s*#d76188/);
+    expect(css).toMatch(/--primary:\s*#d76188/);
+    expect(css).toMatch(/--link:\s*#c63263/);
+    expect(css).not.toMatch(/data-colour|data-tone|inset 0 0 0 2px/);
   });
 
   it("has one light and one dark token block and no remote fonts or decoration", () => {
     expect(css.match(/:root\s*\{/g)).toHaveLength(2);
-    expect(css + read("src/routes/__root.tsx")).not.toMatch(/googleapis|data:image|Sacramento|Caveat/);
+    expect(css + read("src/routes/__root.tsx")).not.toMatch(/googleapis|data:image|Caveat/);
+    // The only script font is the self-hosted wordmark.
+    expect(css.match(/Sacramento/g)).toHaveLength(1);
   });
 });

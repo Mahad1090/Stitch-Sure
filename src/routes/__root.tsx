@@ -12,11 +12,14 @@ import type { ReactNode } from "react";
 
 import urduRegular from "@fontsource/noto-nastaliq-urdu/arabic-400.css?url";
 import urduBold from "@fontsource/noto-nastaliq-urdu/arabic-700.css?url";
+import logoFont from "@fontsource/sacramento/latin-400.css?url";
 import appCss from "../styles.css?url";
+import { SkipLink } from "@/components/stitchsure/ui";
 
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <main id="main" tabIndex={-1} className="flex min-h-screen items-center justify-center bg-background px-4">
+      <SkipLink />
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
         <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
@@ -32,7 +35,7 @@ function NotFoundComponent() {
           </Link>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -41,7 +44,8 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <main id="main" tabIndex={-1} className="flex min-h-screen items-center justify-center bg-background px-4">
+      <SkipLink />
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           This page didn't load
@@ -67,7 +71,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
           </a>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -85,6 +89,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       // Self-hosted; the browser fetches the font only when Urdu text is shown.
       { rel: "stylesheet", href: urduRegular },
       { rel: "stylesheet", href: urduBold },
+      { rel: "stylesheet", href: logoFont },
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],

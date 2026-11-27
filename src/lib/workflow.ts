@@ -1,7 +1,29 @@
+import { formatDate, formatStamp, sampleDates } from './dates';
 import { render, type Msg } from './i18n';
 
 export type Role = 'customer' | 'tailor' | 'worker';
-export type Part = 'Sleeve' | 'Neckline';
+export type Part = 'Sleeve' | 'Neckline' | 'Length' | 'Pocket' | 'Trouser' | 'Other';
+/** Parts beyond sleeve and neckline are recorded only once the customer changes them. */
+export type ExtraPart = Exclude<Part, 'Sleeve' | 'Neckline'>;
+export type Extras = Partial<Record<ExtraPart, string>>;
+export const EXTRA_PARTS: ExtraPart[] = ['Length', 'Pocket', 'Trouser', 'Other'];
+const DEFAULT_EXTRA: Record<ExtraPart, string> = { Length: 'Standard length', Pocket: 'No pocket', Trouser: 'Straight trouser', Other: 'Nothing extra' };
+
+/** What is currently agreed for one part. */
+export function designOf(state: { sleeve: string; neckline: string; extras: Extras }, part: Part): string {
+  if (part === 'Sleeve') return state.sleeve;
+  if (part === 'Neckline') return state.neckline;
+  return state.extras[part] ?? DEFAULT_EXTRA[part];
+}
+
+/** The design as it would look with one part changed. */
+export function withDesign(state: { sleeve: string; neckline: string; extras: Extras }, part: Part, design: string) {
+  return {
+    sleeve: part === 'Sleeve' ? design : state.sleeve,
+    neckline: part === 'Neckline' ? design : state.neckline,
+    extras: part === 'Sleeve' || part === 'Neckline' ? state.extras : { ...state.extras, [part]: design },
+  };
+}
 export type ProductionStage = 'Not cut' | 'Cut' | 'Stitching';
 export type Outcome = 'Possible' | 'Impossible' | 'Needs clarification';
 /** The style value used when the customer describes the change in their note instead of picking a listed style. */
@@ -12,25 +34,32 @@ export function requestedLabel(request: Pick<Request, 'style' | 'note'>): string
   return request.style === DESCRIBED ? request.note.trim() : request.style;
 }
 /** `title` and `text` are the English record; `msg` is the same entry as translatable data. */
-export type Event = { title: string; text: string; status: 'Pending' | 'Approved' | 'Rejected' | 'Superseded'; at: string; msg?: { title: Msg; text: Msg } | undefined };
+export type Event = { title: string; text: string; status: 'Pending' | 'Approved' | 'Rejected' | 'Superseded' | 'Cancelled'; at: string; msg?: { title: Msg; text: Msg } | undefined };
 /** What approval replaced, kept so the customer can undo until the worker starts. */
-type Snapshot = { version: number; sleeve: string; neckline: string; request: Request; events: Event[]; declined: string[]; declinedMsgs: Msg[] };
+type Snapshot = { version: number; sleeve: string; neckline: string; extras: Extras; request: Request; events: Event[]; declined: string[]; declinedMsgs: Msg[] };
 export type Workflow = {
-  stage: ProductionStage; version: number; sleeve: string; neckline: string; request?: Request | undefined;
+  stage: ProductionStage; version: number; sleeve: string; neckline: string; extras: Extras; request?: Request | undefined;
   acknowledged: boolean; stitching: boolean; finished: boolean; paused: boolean;
   events: Event[]; declined: string[]; declinedMsgs: Msg[]; undo?: Snapshot | undefined; approvedAt: string; message: string; error: string;
   messageMsg?: Msg | undefined; errorMsg?: Msg | undefined;
+  /** The tailor's answer to the worker's last reported problem. */
+  tailorReply?: string | undefined;
 };
 const entry = (status: Event['status'], title: Msg, text: Msg, at: string): Event => ({ title: render(title), text: render(text), status, at, msg: { title, text } });
 const note = (message: Msg) => ({ message: render(message), messageMsg: message });
 const quote = (text: string): Msg => ({ key: 'event.plain', vars: { text } });
 
-export const initialWorkflow: Workflow = {
-  stage: 'Cut', version: 1, sleeve: 'Straight sleeve', neckline: 'Round neckline',
-  acknowledged: false, stitching: false, finished: false, paused: false,
-  events: [entry('Approved', { key: 'event.original.title' }, { key: 'event.pair', vars: { first: { term: 'Straight sleeve' }, second: { term: 'Round neckline' } } }, 'Oct 26, 2026, 10:00')],
-  declined: [], declinedMsgs: [], approvedAt: 'Oct 26, 2026', message: '', error: '',
-};
+/** The sample order as it stands today. */
+export function createInitialWorkflow(now: Date = new Date()): Workflow {
+  const { agreed } = sampleDates(now);
+  return {
+    stage: 'Cut', version: 1, sleeve: 'Straight sleeve', neckline: 'Round neckline', extras: { Trouser: 'Straight trouser' },
+    acknowledged: false, stitching: false, finished: false, paused: false,
+    events: [entry('Approved', { key: 'event.original.title' }, { key: 'event.pair', vars: { first: { term: 'Straight sleeve' }, second: { term: 'Round neckline' } } }, formatStamp(agreed))],
+    declined: [], declinedMsgs: [], approvedAt: formatDate(agreed), message: '', error: '',
+  };
+}
+export const initialWorkflow: Workflow = createInitialWorkflow();
 export type Action =
   | { type: 'request'; part: Part | ''; style: string; note: string; reference: boolean; at: string }
   | { type: 'cancel'; at: string }
@@ -45,7 +74,7 @@ export type Action =
   | { type: 'start' }
   | { type: 'finish'; at: string }
   | { type: 'conflict'; kind: string; reason: string; at: string }
-  | { type: 'resolve'; at: string }
+  | { type: 'resolve'; at: string; reply?: string }
   | { type: 'reset' };
 
 const dateOnly = (at: string) => at.split(',').slice(0, 2).join(',');
@@ -54,7 +83,7 @@ export function workflowReducer(state: Workflow, action: Action): Workflow {
   const fail = (key: Extract<Msg['key'], `error.${string}`>) => ({ ...state, error: render({ key }), errorMsg: { key }, message: '', messageMsg: undefined });
   const base = { ...state, error: '', errorMsg: undefined, message: '', messageMsg: undefined };
   switch (action.type) {
-    case 'reset': return initialWorkflow;
+    case 'reset': return createInitialWorkflow();
     case 'request': {
       if (!action.part) return fail('error.noPart');
       if (!action.style) return fail('error.noStyle');
@@ -69,7 +98,7 @@ export function workflowReducer(state: Workflow, action: Action): Workflow {
     case 'cancel': {
       const r = state.request;
       if (!r || r.status !== 'Pending' || (r.outcome && r.outcome !== 'Needs clarification')) return fail('error.cannotCancel');
-      return { ...base, request: undefined, ...note({ key: 'msg.cancelled', vars: { version: state.version } }), events: [...state.events, entry('Rejected', { key: 'event.cancelled.title' }, { key: 'event.partStyle', vars: { part: { term: r.part }, style: { term: requestedLabel(r) } } }, action.at)] };
+      return { ...base, request: undefined, ...note({ key: 'msg.cancelled', vars: { version: state.version } }), events: [...state.events, entry('Cancelled', { key: 'event.cancelled.title' }, { key: 'event.partStyle', vars: { part: { term: r.part }, style: { term: requestedLabel(r) } } }, action.at)] };
     }
     case 'seen': return state.request?.status === 'Pending' ? { ...base, request: { ...state.request, seen: true } } : state;
     case 'stage': return { ...base, stage: action.stage, ...note({ key: 'msg.stage', vars: { stage: { term: action.stage } } }) };
@@ -101,13 +130,13 @@ export function workflowReducer(state: Workflow, action: Action): Workflow {
       if (!design) return fail('error.needDesign');
       const v = state.version + 1;
       const refused: Msg[] = r.outcome === 'Impossible' ? [{ key: 'declined.impossible', vars: { design: { term: requestedLabel(r) }, date: dateOnly(action.at) } }] : [];
-      return { ...base, version: v, sleeve: r.part === 'Sleeve' ? design : state.sleeve, neckline: r.part === 'Neckline' ? design : state.neckline, request: { ...r, status: 'Approved' }, acknowledged: false, approvedAt: dateOnly(action.at), undo: { version: state.version, sleeve: state.sleeve, neckline: state.neckline, request: r, events: state.events, declined: state.declined, declinedMsgs: state.declinedMsgs }, declined: [...state.declined, ...refused.map(m => render(m))], declinedMsgs: [...state.declinedMsgs, ...refused], ...note({ key: 'msg.approved', vars: { design: { term: design }, version: v } }), events: [...state.events.map(e => e.status === 'Approved' ? { ...e, status: 'Superseded' as const } : e), entry('Approved', { key: 'event.approved.title', vars: { version: v } }, { key: 'event.approved.text', vars: { part: { term: r.part }, design: { term: design }, cost: r.cost ?? '', date: r.date ?? '' } }, action.at)] };
+      return { ...base, version: v, ...withDesign(state, r.part, design), request: { ...r, status: 'Approved' }, acknowledged: false, approvedAt: dateOnly(action.at), undo: { version: state.version, sleeve: state.sleeve, neckline: state.neckline, extras: state.extras, request: r, events: state.events, declined: state.declined, declinedMsgs: state.declinedMsgs }, declined: [...state.declined, ...refused.map(m => render(m))], declinedMsgs: [...state.declinedMsgs, ...refused], ...note({ key: 'msg.approved', vars: { design: { term: design }, version: v } }), events: [...state.events.map(e => e.status === 'Approved' ? { ...e, status: 'Superseded' as const } : e), entry('Approved', { key: 'event.approved.title', vars: { version: v } }, { key: 'event.approved.text', vars: { part: { term: r.part }, design: { term: design }, cost: r.cost ?? '', date: r.date ?? '' } }, action.at)] };
     }
     case 'undo': {
       if (!state.undo) return fail('error.nothingToUndo');
       if (state.stitching || state.finished) return fail('error.undoTooLate');
       const u = state.undo;
-      return { ...base, version: u.version, sleeve: u.sleeve, neckline: u.neckline, request: u.request, declined: u.declined, declinedMsgs: u.declinedMsgs, acknowledged: false, undo: undefined, ...note({ key: 'msg.undone', vars: { version: u.version } }), events: [...u.events, entry('Pending', { key: 'event.undone.title' }, { key: 'event.undone.text', vars: { version: u.version } }, action.at)] };
+      return { ...base, version: u.version, sleeve: u.sleeve, neckline: u.neckline, extras: u.extras, request: u.request, declined: u.declined, declinedMsgs: u.declinedMsgs, acknowledged: false, undo: undefined, ...note({ key: 'msg.undone', vars: { version: u.version } }), events: [...u.events, entry('Pending', { key: 'event.undone.title' }, { key: 'event.undone.text', vars: { version: u.version } }, action.at)] };
     }
     case 'reject': {
       const r = state.request;
@@ -127,11 +156,15 @@ export function workflowReducer(state: Workflow, action: Action): Workflow {
       if (!state.stitching) return fail('error.notStarted');
       return { ...base, finished: true, ...note({ key: 'msg.finished' }), events: [...state.events, entry('Approved', { key: 'event.finished.title' }, { key: 'version.n', vars: { version: state.version } }, action.at)] };
     }
-    case 'resolve': return state.paused ? { ...base, paused: false, ...note({ key: 'msg.solved' }), events: [...state.events, entry('Approved', { key: 'event.solved.title' }, { key: 'event.solved.text' }, action.at)] } : state;
+    case 'resolve': {
+      if (!state.paused) return state;
+      const reply = action.reply?.trim();
+      return { ...base, paused: false, tailorReply: reply || undefined, ...note({ key: 'msg.solved' }), events: [...state.events, entry('Approved', { key: 'event.solved.title' }, reply ? { key: 'event.quote', vars: { note: reply } } : { key: 'event.solved.text' }, action.at)] };
+    }
     case 'conflict': {
       if (!action.kind) return fail('error.noKind');
       if (!action.reason.trim()) return fail('error.noProblem');
-      return { ...base, paused: true, acknowledged: false, ...note({ key: 'msg.reported' }), events: [...state.events, entry('Pending', { key: 'event.reported.title' }, { key: 'event.pair', vars: { first: { term: action.kind }, second: action.reason } }, action.at)] };
+      return { ...base, paused: true, acknowledged: false, tailorReply: undefined, ...note({ key: 'msg.reported' }), events: [...state.events, entry('Pending', { key: 'event.reported.title' }, { key: 'event.pair', vars: { first: { term: action.kind }, second: action.reason } }, action.at)] };
     }
   }
 }

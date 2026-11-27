@@ -22,7 +22,7 @@ export async function flushSend() {
   });
 }
 
-export const openForm = () => click("Change my design");
+export const openForm = () => click(/^Change my design/);
 
 /** Walks the three one-question screens and sends. */
 export async function sendRequest(
@@ -32,6 +32,8 @@ export async function sendRequest(
   pick(/^Sleeve/);
   click("Next");
   pick(o.style ?? /^Bell sleeves/);
+  // A described style asks for the words straight away.
+  if (o.note && screen.queryByLabelText(/^Note/)) type(/^Note/, o.note);
   click("Next");
   if (o.note) type(/^Note/, o.note);
   click("Send request");

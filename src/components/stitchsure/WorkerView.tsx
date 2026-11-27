@@ -4,6 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { CUSTOMER, ORDER, PROBLEM_KINDS, RELEVANT_MEASUREMENT } from '@/lib/sample';
 import { useLang } from '@/lib/i18n';
+import { EXTRA_PARTS } from '@/lib/workflow';
 import { Card, Chip, Disclosure, ErrorSlot, Facts, Field, Notice, OptionList, focusProps } from './ui';
 import { Garment } from './Garment';
 import type { StitchSureModel } from './useStitchSure';
@@ -15,8 +16,9 @@ export function WorkerView({ m }: { m: StitchSureModel }) {
   const r = state.request;
   const pending = r?.status === 'Pending';
   const replaced = state.events.filter(e => e.status === 'Superseded');
-  const relevant = r?.status === 'Approved' ? RELEVANT_MEASUREMENT[r.part] : RELEVANT_MEASUREMENT.Sleeve;
+  const relevant = RELEVANT_MEASUREMENT[r?.status === 'Approved' ? r.part : 'Sleeve'];
   const updated = state.version > 1 && !state.acknowledged && !state.stitching && !state.finished;
+  const hold = state.paused ? ({ 'aria-disabled': true, 'aria-describedby': 'hold-reason' } as const) : {};
   if (worker.reportOpen) return <ReportForm m={m} />;
   return (
     <div className="ss-stack ss-narrow">
@@ -29,17 +31,20 @@ export function WorkerView({ m }: { m: StitchSureModel }) {
         <p className="ss-meta">{t('worker.meta', { id: ORDER.id, name: CUSTOMER.name, date: state.approvedAt })}</p>
         {updated && <Notice tone="info" role="status">{t('worker.updated', { version: state.version, old: state.version - 1 })}</Notice>}
         <div className="ss-job">
-          <Garment sleeve={state.sleeve} neckline={state.neckline} />
+          <Garment sleeve={state.sleeve} neckline={state.neckline} extras={state.extras} />
           <Facts label={t('worker.job', { version: state.version })} rows={[
             { label: t('part.Sleeve'), value: <strong className="ss-big">{term(state.sleeve)}</strong> },
             { label: t('part.Neckline'), value: <strong className="ss-big">{term(state.neckline)}</strong> },
+            ...EXTRA_PARTS.filter(p => state.extras[p]).map(p => ({ label: t(`part.${p}`), value: <strong className="ss-big">{term(state.extras[p]!)}</strong> })),
             { label: t('fact.fabric'), value: term(ORDER.fabric) },
             { label: t('fact.due'), value: <bdi dir="ltr">{ORDER.delivery}</bdi> },
-            ...(r?.status === 'Approved' && r.note ? [{ label: t('worker.notes'), value: <bdi>“{r.note}”</bdi> }] : []),
+            // The worker's instructions are never shortened. A described design already is the note.
+            ...(r?.status === 'Approved' && r.note && ![state.sleeve, state.neckline, ...Object.values(state.extras)].includes(r.note.trim()) ? [{ label: t('worker.notes'), value: <bdi>“{r.note}”</bdi> }] : []),
           ]} />
         </div>
         {pending && <Notice tone="info">{t('worker.pending')}</Notice>}
-        {state.paused && <Notice tone="bad">{t('worker.paused')}</Notice>}
+        {state.paused && <div id="hold-reason"><Notice tone="bad">{t('worker.paused')}</Notice></div>}
+        {!state.paused && state.tailorReply && <Notice tone="info" role="status">{t('worker.reply', { reply: state.tailorReply })}</Notice>}
         {state.finished && <Notice tone="ok">{t('worker.finished')}</Notice>}
         {!state.stitching && (
           <label className="ss-confirm" htmlFor="read-current">
@@ -51,8 +56,9 @@ export function WorkerView({ m }: { m: StitchSureModel }) {
         {!state.finished && (
           <div className="ss-actions">
             {!state.stitching
-              ? <Button size="lg" className="ss-wide" disabled={busy || state.paused} onClick={() => dispatch({ type: 'start' })}><Scissors aria-hidden />{t('worker.start')}</Button>
-              : <Button size="lg" className="ss-wide" disabled={busy || state.paused} onClick={worker.finish}><Flag aria-hidden />{t('worker.finish')}</Button>}
+              /* On hold: still reachable, so the reason can be read (D5A A-23). */
+              ? <Button size="lg" className="ss-wide" disabled={busy} {...hold} onClick={() => { if (!state.paused) dispatch({ type: 'start' }); }}><Scissors aria-hidden />{t('worker.start')}</Button>
+              : <Button size="lg" className="ss-wide" disabled={busy} {...hold} onClick={() => { if (!state.paused) worker.finish(); }}><Flag aria-hidden />{t('worker.finish')}</Button>}
           </div>
         )}
         <div className="ss-secondary">

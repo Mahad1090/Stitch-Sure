@@ -6,21 +6,41 @@ import { STEPS } from '@/lib/status';
 import { useLang, type Key, type Msg } from '@/lib/i18n';
 
 export type Status =
-  | 'Approved' | 'Pending' | 'Rejected' | 'Superseded' | 'Can be made' | 'Cannot be made' | 'Declined' | 'Finished'
+  | 'Approved' | 'Pending' | 'Rejected' | 'Superseded' | 'Cancelled' | 'Can be made' | 'Cannot be made' | 'Declined' | 'Finished'
   | 'Waiting for you' | 'Waiting for the tailor' | 'Waiting for the customer' | 'Agreed';
 
 /** Status is always words plus an icon, never colour alone. */
 const OK: Status[] = ['Approved', 'Can be made', 'Finished', 'Agreed'];
-const BAD: Status[] = ['Rejected', 'Cannot be made', 'Declined'];
+const BAD: Status[] = ['Rejected', 'Cannot be made', 'Declined', 'Cancelled'];
 export function Chip({ status, version }: { status: Status; version?: number }) {
   const { t } = useLang();
   const tone = OK.includes(status) ? 'ok' : BAD.includes(status) ? 'bad' : status === 'Superseded' ? 'off' : 'wait';
   const Icon = tone === 'ok' ? Check : tone === 'bad' ? X : tone === 'off' ? Layers : Clock3;
-  return <span className={cn('ss-chip', `ss-chip-${tone}`)}><Icon aria-hidden />{t(`status.${status}` as Key, version ? { version } : undefined)}</span>;
+  return <span className={cn('ss-chip', `ss-chip-${tone}`)}><Icon aria-hidden />{t(`status.${status}` as Key)}{version ? <small>{t('version.n', { version })}</small> : null}</span>;
 }
 
 export function Avatar({ initials }: { initials: string }) {
   return <span className="ss-avatar" aria-hidden>{initials}</span>;
+}
+
+/** How much of a long note shows before "Show more" (D5A M-25). */
+const PREVIEW = 100;
+export function LongText({ text }: { text: string }) {
+  const { t } = useLang();
+  const [all, setAll] = useState(false);
+  if (text.length <= PREVIEW) return <bdi>{text}</bdi>;
+  return (
+    <>
+      <bdi>{all ? text : `${text.slice(0, PREVIEW).trimEnd()}…`}</bdi>{' '}
+      <button type="button" className="ss-more" aria-expanded={all} onClick={() => setAll(v => !v)}>{t(all ? 'text.less' : 'text.more')}</button>
+    </>
+  );
+}
+
+/** First stop on every page: jumps past the bars to the task (D5A M-16). */
+export function SkipLink() {
+  const { t } = useLang();
+  return <a className="ss-skip" href="#main" onClick={e => { e.preventDefault(); document.getElementById('main')?.focus(); }}>{t('skip')}</a>;
 }
 
 /** Marks a heading as the place focus moves to after a screen change (D5A S-04). */

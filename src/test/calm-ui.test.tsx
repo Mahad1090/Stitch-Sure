@@ -20,37 +20,44 @@ const button = (name: string | RegExp) => screen.getByRole("button", { name });
 const noButton = (name: string | RegExp) => screen.queryByRole("button", { name });
 const heading = (name: string | RegExp) => screen.queryByRole("heading", { name });
 const timeline = () => screen.queryByRole("complementary", { name: "Version timeline" });
-const clutter = () => [".ss-rail", ".ss-tiles", ".ss-activity"].map((s) => document.querySelector(s));
+const clutter = () => [".ss-rail", ".ss-timeline"].map((s) => document.querySelector(s));
 
 describe("Customer home", () => {
   it("asks one question with three choices and hides progress, facts and history", () => {
     renderApp();
     expect(heading("What would you like to do?")).toBeInTheDocument();
     expect(document.querySelectorAll(".ss-card")).toHaveLength(1);
-    for (const n of ["Change my design", "See my order", "Message Master Mahad"])
+    for (const n of [/^Change my design/, /^See my order/, /^Message Master Mahad/])
       expect(button(n)).toBeInTheDocument();
-    expect(clutter()).toEqual([null, null, null]);
-    expect(document.querySelector(".ss-shell")).not.toHaveClass("has-activity");
+    expect(clutter()).toEqual([null, null]);
   });
 
-  it("shows progress, facts and the timeline under See my order, and goes back", () => {
+  it("shows one quiet card under See my order, with progress and history on request", () => {
     renderApp();
-    click("See my order");
-    for (const el of clutter()) expect(el).not.toBeNull();
-    expect(timeline()).toBeInTheDocument();
-    click("Back to choices");
+    click(/^See my order/);
+    expect(document.querySelectorAll(".ss-card")).toHaveLength(1);
+    expect(clutter()).toEqual([null, null]);
     expect(timeline()).not.toBeInTheDocument();
+    click("Progress and history");
+    expect(document.querySelector(".ss-rail")).not.toBeNull();
+    expect(document.querySelector(".ss-timeline")).not.toBeNull();
+    click("Go back");
+    expect(heading("What would you like to do?")).toBeInTheDocument();
   });
 
-  it("shows them again once a request is in progress", async () => {
+  it("keeps the waiting screen simple: progress and one card, each fact once", async () => {
     renderApp();
     await sendRequest();
-    for (const el of clutter()) expect(el).not.toBeNull();
+    expect(document.querySelectorAll(".ss-card")).toHaveLength(1);
+    expect(document.querySelector(".ss-rail")).not.toBeNull();
+    expect(timeline()).not.toBeInTheDocument();
+    expect(document.querySelector(".ss-hero")!.textContent).toBe("Waiting for Master Mahad");
+    expect(screen.getAllByText(/Nothing changes until you both agree/)).toHaveLength(1);
   });
 
   it("keeps Send disabled until a message is typed", () => {
     renderApp();
-    click("Message Master Mahad");
+    click(/^Message Master Mahad/);
     expect(button("Send")).toBeDisabled();
     type("Your message", "Please call me");
     click("Send");
@@ -61,11 +68,54 @@ describe("Customer home", () => {
     renderApp();
     startStitching();
     viewAs("Customer");
-    const change = button("Change my design");
+    const change = button(/^Change my design/);
     expect(change).toHaveAttribute("aria-disabled", "true");
-    expect(change).toHaveAccessibleDescription(/Stitching has started/);
+    expect(change).toHaveAccessibleName(/Stitching has started/);
     fireEvent.click(change);
     expect(heading("What would you like to do?")).toBeInTheDocument();
+  });
+});
+
+describe("Back button beside the banner", () => {
+  const back = () => screen.queryByRole("button", { name: "Go back" });
+  const iconOnly = () => {
+    expect(back()).toHaveClass("ss-back");
+    expect(back()!.textContent).toBe("");
+  };
+
+  it("is hidden on the starting screen and returns from every opened screen", () => {
+    renderApp();
+    expect(back()).not.toBeInTheDocument();
+    for (const open of [() => openForm(), () => click(/^See my order/), () => click(/^Message Master Mahad/)]) {
+      open();
+      iconOnly();
+      click("Go back");
+      expect(heading("What would you like to do?")).toBeInTheDocument();
+    }
+  });
+
+  it("leaves a waiting request without changing it, and returns to it", async () => {
+    renderApp();
+    await sendRequest();
+    iconOnly();
+    click("Go back");
+    expect(heading("What would you like to do?")).toBeInTheDocument();
+    expect(button(/^Change my design/)).toHaveAccessibleName(/already waiting/);
+    click(/^Your request/);
+    expect(heading("Your request")).toBeInTheDocument();
+  });
+
+  it("is on the tailor and worker screens too", () => {
+    renderApp();
+    viewAs("Tailor");
+    iconOnly();
+    viewAs("Worker");
+    click("Go back");
+    expect(screen.getByRole("radio", { name: "Tailor" })).toBeChecked();
+    viewAs("Worker");
+    click("Report a problem");
+    click("Go back");
+    expect(button("Start stitching")).toBeInTheDocument();
   });
 });
 
@@ -84,7 +134,7 @@ describe("Request form: one question per screen", () => {
   it("selects the part from the garment picture", () => {
     renderApp();
     openForm();
-    fireEvent.click(document.querySelector(".ss-hotspot-neck")!);
+    fireEvent.click(document.querySelector(".ss-hotspot-neckline")!);
     expect(screen.getByRole("radio", { name: /^Neckline/ })).toBeChecked();
   });
 
@@ -114,10 +164,14 @@ describe("Request form: one question per screen", () => {
     openForm();
     pick(/^Sleeve/);
     click("Next");
+    expect(screen.queryByLabelText(/^Note/)).not.toBeInTheDocument();
     pick(/my own words/);
-    click("Next");
-    expect(button("Send request")).toBeDisabled();
+    // The writing box is there at once, and Next waits for words.
+    expect(button("Next")).toBeDisabled();
+    expect(button("Next")).toHaveAccessibleDescription(/Write what you want/);
     type(/^Note/, "wide cuff");
+    click("Next");
+    expect(screen.getByLabelText(/^Note/)).toHaveValue("wide cuff");
     expect(button("Send request")).toBeEnabled();
   });
 });
@@ -150,7 +204,7 @@ describe("Worker: the job, nothing else", () => {
     renderApp();
     viewAs("Worker");
     expect(document.querySelectorAll(".ss-card")).toHaveLength(1);
-    expect(clutter()).toEqual([null, null, null]);
+    expect(clutter()).toEqual([null, null]);
     expect(button("Start stitching")).toBeInTheDocument();
     expect(screen.queryByLabelText("Describe the problem")).not.toBeInTheDocument();
     click("Report a problem");

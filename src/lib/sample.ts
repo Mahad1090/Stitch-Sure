@@ -1,4 +1,5 @@
 import { t, term, type Lang } from '@/lib/i18n';
+import { formatDate, sampleDates } from '@/lib/dates';
 import type { Outcome, Part, Role } from '@/lib/workflow';
 
 /** All people, contact details and measurements below are invented sample data. */
@@ -12,10 +13,10 @@ export const ORDER = {
   id: 'SS-014',
   garment: 'Purple kurta',
   fabric: 'Cotton · Purple · 3 gaz',
-  placed: 'Oct 20, 2026',
-  delivery: 'Oct 30, 2026',
   event: 'Cousin’s mehndi',
-  eventDate: 'Oct 31, 2026',
+  get placed() { return formatDate(sampleDates().placed); },
+  get delivery() { return formatDate(sampleDates().delivery); },
+  get eventDate() { return formatDate(sampleDates().event); },
 };
 
 /** Simulated in-app notice shown to the tailor before sending. Nothing is really sent. */
@@ -32,16 +33,16 @@ export function noticeText(o: { part: Part; style: string; outcome: Outcome; rea
 
 /** Everything Areeba has placed. Only SS-014 is live in this prototype; the rest are sample history. */
 export const CUSTOMER_ORDERS = [
-  { id: 'SS-014', garment: 'Purple kurta', detail: 'Due Oct 30, 2026', status: 'In production', current: true },
-  { id: 'SS-009', garment: 'Maroon kameez', detail: 'Delivered Aug 18, 2026', status: 'Delivered', current: false },
-  { id: 'SS-006', garment: 'Green kurta', detail: 'Delivered Jun 24, 2026', status: 'Delivered', current: false },
-  { id: 'SS-003', garment: 'Cream shalwar', detail: 'Delivered Mar 9, 2026', status: 'Delivered', current: false },
+  { id: 'SS-014', garment: 'Purple kurta', current: true, deliveredDaysAgo: 0 },
+  { id: 'SS-009', garment: 'Maroon kameez', current: false, deliveredDaysAgo: 101 },
+  { id: 'SS-006', garment: 'Green kurta', current: false, deliveredDaysAgo: 156 },
+  { id: 'SS-003', garment: 'Cream shalwar', current: false, deliveredDaysAgo: 263 },
 ];
 
 export const CUSTOMER = {
   name: 'Areeba',
   initials: 'AR',
-  since: 'Customer since 2024 · 3 earlier orders',
+  get sinceYear() { return new Date().getFullYear() - 2; },
   contact: 'Phone · 03•• ••• 0000',
   measurements: [
     { label: 'Chest', value: '36″' },
@@ -53,11 +54,17 @@ export const CUSTOMER = {
 };
 
 /** Which measurement on file matters for each garment part. */
-export const RELEVANT_MEASUREMENT: Record<Part, string> = { Sleeve: 'Sleeve length (bazu)', Neckline: 'Neck depth (gala)' };
+export const RELEVANT_MEASUREMENT: Partial<Record<Part, string>> = { Sleeve: 'Sleeve length (bazu)', Neckline: 'Neck depth (gala)', Length: 'Kurta length (lambai)' };
 
+/** Listed styles per part. "Other" has none: the customer describes it. */
 export const STYLE_OPTIONS = {
-  Sleeve: ['Bell sleeves', 'Cuff Trim', 'Straight sleeve'],
-  Neckline: ['Round neckline', 'V-shaped neckline', 'Boat neckline'],
+  Sleeve: ['Bell sleeves', 'Cuff Trim', 'Straight sleeve', 'Half sleeve', 'Three-quarter sleeve', 'Puff sleeve', 'Sleeveless'],
+  Neckline: ['Round neckline', 'V-shaped neckline', 'Boat neckline', 'Square neckline', 'Deep round neckline', 'Band collar'],
+  Length: ['Standard length', 'Short length', 'Long length'],
+  Pocket: ['No pocket', 'Side pocket', 'Front pocket'],
+  Trouser: ['Straight trouser', 'Shalwar', 'Cigarette trouser', 'Wide-leg trouser', 'Churidar'],
+  Other: [],
 } as const satisfies Record<Part, readonly string[]>;
+export const PARTS = Object.keys(STYLE_OPTIONS) as Part[];
 
 export const PROBLEM_KINDS = ['Measurement unclear', 'Fabric issue', 'Instructions conflict', 'Other'] as const;

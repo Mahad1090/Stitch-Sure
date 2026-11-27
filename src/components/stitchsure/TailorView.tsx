@@ -4,9 +4,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { CUSTOMER, ORDER, RELEVANT_MEASUREMENT, noticeText } from '@/lib/sample';
 import { useLang } from '@/lib/i18n';
-import { requestedLabel, type Outcome, type ProductionStage } from '@/lib/workflow';
+import { designOf, requestedLabel, withDesign, type Outcome, type ProductionStage } from '@/lib/workflow';
 import { Timeline } from './Activity';
-import { Avatar, Card, Chip, Disclosure, ErrorSlot, Facts, Field, Notice, OptionList, Segmented, focusProps } from './ui';
+import { Avatar, Card, Chip, Disclosure, ErrorSlot, Facts, Field, LongText, Notice, OptionList, Segmented, focusProps } from './ui';
 import { Garment } from './Garment';
 import type { StitchSureModel } from './useStitchSure';
 
@@ -26,7 +26,9 @@ export function TailorView({ m }: { m: StitchSureModel }) {
         <Card title={t('tailor.problem.title')} aside={<Chip status="Waiting for you" />}>
           <blockquote className="ss-quote"><bdi>“{report?.msg ? msg(report.msg.text) : report?.text}”</bdi></blockquote>
           <p className="ss-meta">{t('tailor.problem.hold')}</p>
-          <div className="ss-actions"><Button variant="outline" onClick={worker.resolveProblem}>{t('tailor.problem.solve')}</Button></div>
+          <Field label={t('tailor.problem.reply')} htmlFor="problem-reply"><Textarea id="problem-reply" rows={3} value={worker.reply} onChange={e => worker.setReply(e.target.value)} /></Field>
+          <div className="ss-actions"><Button disabled={!worker.reply.trim()} aria-describedby="reply-help" onClick={worker.resolveProblem}>{t('tailor.problem.solve')}</Button></div>
+          <p className="ss-hint" id="reply-help">{t('tailor.problem.replyHelp')}</p>
         </Card>
       )}
       <RequestCard m={m} />
@@ -38,7 +40,7 @@ export function TailorView({ m }: { m: StitchSureModel }) {
 
 function RequestCard({ m }: { m: StitchSureModel }) {
   const { t, term } = useLang();
-  const { state, decide, busy } = m;
+  const { state } = m;
   const r = state.request;
   if (!r) {
     return (
@@ -57,27 +59,22 @@ function RequestCard({ m }: { m: StitchSureModel }) {
     <Card title={t('tailor.request.title')} aside={<Chip status={pending ? (r.outcome ? 'Waiting for the customer' : 'Waiting for you') : r.status} />}>
       <p className="ss-ask"><span>{t(`part.${r.part}`)}:</span> <strong>{term(wanted)}</strong></p>
       {sentAt && <p className="ss-meta">{t('tailor.sentAt', { at: sentAt })}</p>}
-      {pending && (
+      {/* An "Other" request changes nothing the drawing can show. */}
+      {pending && r.part !== 'Other' && (
         <div className="ss-compare" role="group" aria-label={t('tailor.compare')}>
-          <figure><Garment small sleeve={state.sleeve} neckline={state.neckline} part={r.part} /><figcaption><span>{t('tailor.now', { version: state.version })}</span><strong>{term(r.part === 'Sleeve' ? state.sleeve : state.neckline)}</strong></figcaption></figure>
+          <figure><Garment small sleeve={state.sleeve} neckline={state.neckline} extras={state.extras} part={r.part} /><figcaption><span>{t('tailor.now', { version: state.version })}</span><strong>{term(designOf(state, r.part))}</strong></figcaption></figure>
           <ArrowRight aria-hidden className="ss-compare-arrow ss-flip" />
-          <figure><Garment small sleeve={r.part === 'Sleeve' ? wanted : state.sleeve} neckline={r.part === 'Neckline' ? wanted : state.neckline} part={r.part} /><figcaption><span>{t('tailor.requested')}</span><strong>{term(wanted)}</strong></figcaption></figure>
+          <figure><Garment small {...withDesign(state, r.part, wanted)} part={r.part} /><figcaption><span>{t('tailor.requested')}</span><strong>{term(wanted)}</strong></figcaption></figure>
         </div>
       )}
       <h3 className="ss-subhead">{t('tailor.note')}</h3>
-      {r.note ? <blockquote className="ss-quote"><bdi>“{r.note}”</bdi></blockquote> : <p className="ss-meta">{t('waiting.noNote')}</p>}
+      {r.note ? <blockquote className="ss-quote"><LongText text={`“${r.note}”`} /></blockquote> : <p className="ss-meta">{t('waiting.noNote')}</p>}
       {r.answer && <><h3 className="ss-subhead">{t('tailor.reply')}</h3><blockquote className="ss-quote"><bdi>“{r.answer}”</bdi></blockquote></>}
       <h3 className="ss-subhead">{t('tailor.photo')}</h3>
       {r.reference
-        ? <div className="ss-ref"><span className="ss-ref-thumb" aria-hidden><Garment small sleeve={r.part === 'Sleeve' ? wanted : 'Straight sleeve'} neckline={r.part === 'Neckline' ? wanted : 'Round neckline'} /></span><span><strong><bdi dir="ltr">{r.part === 'Sleeve' ? 'sleeve' : 'neckline'}-reference.jpg</bdi></strong><small>{t('tailor.photoSample')}</small></span></div>
+        ? <div className="ss-ref"><span className="ss-ref-thumb" aria-hidden><Garment small {...withDesign(state, r.part, wanted)} /></span><span><strong><bdi dir="ltr">{r.part.toLowerCase()}-reference.jpg</bdi></strong><small>{t('tailor.photoSample')}</small></span></div>
         : <p className="ss-meta">{t('tailor.noPhoto')}</p>}
-      {pending && (
-        <div className="ss-seen">
-          {r.seen
-            ? <p><Eye aria-hidden />{t('tailor.seen')}</p>
-            : <><p><Eye aria-hidden />{t('tailor.notSeen')}</p><Button variant="outline" disabled={busy} onClick={decide.markSeen}>{t('tailor.markSeen')}</Button></>}
-        </div>
-      )}
+      {pending && r.seen && <p className="ss-seen"><Eye aria-hidden />{t('tailor.seen')}</p>}
     </Card>
   );
 }
@@ -155,7 +152,7 @@ function MoreCard({ m }: { m: StitchSureModel }) {
           <Avatar initials={CUSTOMER.initials} />
           <div>
             <h3>{CUSTOMER.name}</h3>
-            <p>{term(CUSTOMER.since)}</p>
+            <p>{t('detail.since', { year: CUSTOMER.sinceYear })}</p>
             <p>{term(CUSTOMER.contact)}</p>
           </div>
         </div>

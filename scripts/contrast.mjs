@@ -63,10 +63,11 @@ for (const [theme, t] of Object.entries(themes)) {
     );
   }
 }
-// White icon on the brand blue (logo tile, icon chips): non-text, 3:1.
+// White icon on the brand colour (logo tile, icon chips): non-text, 3:1.
 const white = ratio("#ffffff", themes.light.brand);
 if (white < 3) failed++;
 console.log(`| both | White icon on brand tile | #ffffff | brand ${themes.light.brand} | ${white.toFixed(2)}:1 | 3:1 | ${white >= 3 ? "pass" : "FAIL"} |`);
+
 if (failed) {
   console.error(`${failed} pair(s) below target`);
   process.exit(1);

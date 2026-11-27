@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronRight, Scissors, ShieldCheck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { daysFrom, formatDate } from '@/lib/dates';
 import { CUSTOMER_ORDERS, ORDER } from '@/lib/sample';
 import { useLang } from '@/lib/i18n';
 import type { StitchSureModel } from './useStitchSure';
@@ -13,24 +14,35 @@ export function Drawer({ m }: { m: StitchSureModel }) {
   const { t, term } = useLang();
   const { state, role, setNavOpen } = m;
   const close = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   const shut = useRef(() => setNavOpen(false));
+  // Read during render: once the page behind turns inert, the browser has already moved focus away.
+  const [opener] = useState(() => document.activeElement as HTMLElement | null);
   useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
     close.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') shut.current(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') shut.current();
+      if (e.key !== 'Tab') return;
+      // Tab wraps inside the menu (D5A M-07).
+      const items = [...(panel.current?.querySelectorAll<HTMLElement>('button, a[href]') ?? [])];
+      const edge = e.shiftKey ? items[0] : items.at(-1);
+      if (document.activeElement !== edge && panel.current?.contains(document.activeElement)) return;
+      e.preventDefault();
+      (e.shiftKey ? items.at(-1) : items[0])?.focus();
+    };
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
       // Wait until the page behind is no longer inert.
       setTimeout(() => opener?.focus(), 0);
     };
-  }, []);
+  }, [opener]);
   const list = role === 'customer' ? t('nav.customerCount', { count: CUSTOMER_ORDERS.length }) : t(`nav.${role}`);
   const part = state.request?.part;
   return (
     <>
       <div className="ss-scrim" onClick={shut.current} />
-      <div className="ss-side" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+      <div ref={panel} className="ss-side" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
         <div className="ss-side-head"><h2 id="drawer-title">{list}</h2><Button ref={close} variant="ghost" size="icon" aria-label={t('nav.close')} onClick={shut.current}><X aria-hidden /></Button></div>
         <ul className="ss-side-list">
           <li>
@@ -47,7 +59,7 @@ export function Drawer({ m }: { m: StitchSureModel }) {
           {role === 'customer' && CUSTOMER_ORDERS.filter(o => !o.current).map(o => (
             <li key={o.id} className="ss-order-past">
               <Check aria-hidden />
-              <span className="ss-order-text"><strong>{term(o.garment)}</strong><small><bdi dir="ltr">{o.id}</bdi> · {term(o.detail)}</small></span>
+              <span className="ss-order-text"><strong>{term(o.garment)}</strong><small><bdi dir="ltr">{o.id}</bdi> · {t('nav.deliveredOn', { date: formatDate(daysFrom(new Date(), -o.deliveredDaysAgo)) })}</small></span>
             </li>
           ))}
         </ul>

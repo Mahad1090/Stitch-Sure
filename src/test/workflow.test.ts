@@ -43,7 +43,7 @@ describe('V2 rules from the critique log', () => {
     expect(reduce(initialWorkflow, { type: 'request', part: 'Neckline', style: 'As described in my note', note: '', reference: false, at }).request).toBeUndefined();
     expect(reduce(initialWorkflow, { type: 'request', part: 'Neckline', style: 'As described in my note', note: 'slightly deeper V', reference: false, at }).request?.status).toBe('Pending');
   });
-  it('the no-style error offers the note option and keeps the note', () => expect(reduce(initialWorkflow, { type: 'request', part: 'Sleeve', style: '', note: 'x', reference: false, at }).error).toMatch(/Describe it in my own words/));
+  it('the no-style error offers the note option and keeps the note', () => expect(reduce(initialWorkflow, { type: 'request', part: 'Sleeve', style: '', note: 'x', reference: false, at }).error).toMatch(/Other.*your own words/));
   it('the customer can cancel before the tailor reviews', () => { const s = reduce(pending(), { type: 'cancel', at }); expect(s.request).toBeUndefined(); expect(s.version).toBe(1); });
   it('cannot cancel once the tailor has answered', () => expect(reduce(reviewed(), { type: 'cancel', at }).request?.status).toBe('Pending'));
   it('answering a question sends it back to the tailor', () => {

@@ -209,7 +209,7 @@ describe("S-08: garment hotspots are pointer shortcuts only", () => {
     renderApp();
     openForm();
     const spots = document.querySelectorAll<HTMLButtonElement>(".ss-hotspot");
-    expect(spots).toHaveLength(2);
+    expect(spots).toHaveLength(5);
     spots.forEach((s) => expect(s.tabIndex).toBe(-1));
   });
 });
@@ -234,17 +234,16 @@ describe("M-26: phone order is banner, task, progress, facts", () => {
       hero: q(".ss-hero"),
       task: q("[data-focus-target]").closest("section")!,
       rail: q(".ss-rail"),
-      tiles: q(".ss-tiles"),
     };
   };
 
   it("puts the task card right after the banner at 700px or narrower", async () => {
-    const { hero, task, rail, tiles } = await check(true);
-    expect(follows(hero, task) && follows(task, rail) && follows(rail, tiles)).toBe(true);
+    const { hero, task, rail } = await check(true);
+    expect(follows(hero, task) && follows(task, rail)).toBe(true);
   });
 
-  it("keeps progress and facts above the task on wider screens", async () => {
-    const { rail, tiles, task } = await check(false);
-    expect(follows(rail, tiles) && follows(tiles, task)).toBe(true);
+  it("keeps progress above the task on wider screens", async () => {
+    const { rail, task } = await check(false);
+    expect(follows(rail, task)).toBe(true);
   });
 });

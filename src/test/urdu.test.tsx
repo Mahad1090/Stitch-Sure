@@ -93,7 +93,7 @@ describe("Language switch", () => {
     urdu();
     expect(screen.getByRole("heading", { name: "آپ کیا کرنا چاہیں گے؟" })).toBeInTheDocument();
     for (const name of ["میرا ڈیزائن بدلیں", "میرا آرڈر دیکھیں", "ماسٹر مہاد کو پیغام بھیجیں"])
-      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: new RegExp(`^${name}`) })).toBeInTheDocument();
   });
 });
 
@@ -109,13 +109,13 @@ describe("All three roles in Urdu", () => {
       fireEvent.change(el, { target: { value } });
     };
     clean();
-    click("میرا آرڈر دیکھیں");
+    click(/^میرا آرڈر دیکھیں/);
     clean();
-    click("انتخاب پر واپس");
-    click("ماسٹر مہاد کو پیغام بھیجیں");
+    click("واپس جائیں");
+    click(/^ماسٹر مہاد کو پیغام بھیجیں/);
     clean();
-    click("انتخاب پر واپس");
-    click("میرا ڈیزائن بدلیں");
+    click("واپس جائیں");
+    click(/^میرا ڈیزائن بدلیں/);
     clean();
     pick(/^آستین/);
     click("آگے");
