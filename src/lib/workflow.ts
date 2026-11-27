@@ -5,6 +5,10 @@ export type Outcome = 'Possible' | 'Impossible' | 'Needs clarification';
 /** The style value used when the customer describes the change in their note instead of picking a listed style. */
 export const DESCRIBED = 'As described in my note';
 export type Request = { part: Part; style: string; note: string; reference: boolean; status: 'Pending' | 'Approved' | 'Rejected'; seen: boolean; outcome?: Outcome; reason?: string; alternative?: string; cost?: string; date?: string; answer?: string };
+/** The design the customer asked for, in words people can act on. For a described style that is their own note. */
+export function requestedLabel(request: Pick<Request, 'style' | 'note'>): string {
+  return request.style === DESCRIBED ? request.note.trim() : request.style;
+}
 export type Event = { title: string; text: string; status: 'Pending' | 'Approved' | 'Rejected' | 'Superseded'; at: string };
 /** What approval replaced, kept so the customer can undo until the worker starts. */
 type Snapshot = { version: number; sleeve: string; neckline: string; request: Request; events: Event[]; declined: string[] };
@@ -45,16 +49,16 @@ export function workflowReducer(state: Workflow, action: Action): Workflow {
     case 'reset': return initialWorkflow;
     case 'request': {
       if (!action.part) return fail('Choose which part to change, then send again. Your note is kept.');
-      if (!action.style) return fail('Choose a style, or pick “As described in my note”. Your note is kept.');
+      if (!action.style) return fail('Choose a style, or pick “Describe it in my own words”. Your note is kept.');
       if (action.style === DESCRIBED && !action.note.trim()) return fail('Describe the style you want in the note, or choose a listed style. Your choices are kept.');
       if (state.request?.status === 'Pending') return fail('You already have a request waiting. Cancel it or wait for the tailor before sending another.');
       if (state.stitching || state.paused) return fail('Stitching has started. Ask the tailor before requesting another change.');
-      return { ...base, request: { part: action.part, style: action.style, note: action.note, reference: action.reference, status: 'Pending', seen: false }, acknowledged: false, undo: undefined, message: 'Request sent to Master Mahad.', events: [...state.events, { title: `${action.part} change requested`, text: `${action.style}${action.note ? ` · “${action.note}”` : ''}`, status: 'Pending', at: action.at }] };
+      return { ...base, request: { part: action.part, style: action.style, note: action.note, reference: action.reference, status: 'Pending', seen: false }, acknowledged: false, undo: undefined, message: 'Request sent to Master Mahad.', events: [...state.events, { title: `${action.part} change requested`, text: action.style === DESCRIBED ? `“${action.note.trim()}”` : `${action.style}${action.note ? ` · “${action.note}”` : ''}`, status: 'Pending', at: action.at }] };
     }
     case 'cancel': {
       const r = state.request;
       if (!r || r.status !== 'Pending' || (r.outcome && r.outcome !== 'Needs clarification')) return fail('This request can no longer be cancelled here. Choose an option instead.');
-      return { ...base, request: undefined, message: `Request cancelled. Your agreed design (Version ${state.version}) stays the same.`, events: [...state.events, { title: 'Customer cancelled the request', text: `${r.part}: ${r.style}`, status: 'Rejected', at: action.at }] };
+      return { ...base, request: undefined, message: `Request cancelled. Your agreed design (Version ${state.version}) stays the same.`, events: [...state.events, { title: 'Customer cancelled the request', text: `${r.part}: ${requestedLabel(r)}`, status: 'Rejected', at: action.at }] };
     }
     case 'seen': return state.request?.status === 'Pending' ? { ...base, request: { ...state.request, seen: true } } : state;
     case 'stage': return { ...base, stage: action.stage, message: `Production stage set to ${action.stage}.` };
@@ -77,10 +81,10 @@ export function workflowReducer(state: Workflow, action: Action): Workflow {
     case 'approve': {
       const r = state.request;
       if (!r || r.status !== 'Pending' || !r.outcome || r.outcome === 'Needs clarification') return fail('Wait for the tailor’s answer before approving.');
-      const design = r.outcome === 'Impossible' ? r.alternative : r.style;
+      const design = r.outcome === 'Impossible' ? r.alternative : requestedLabel(r);
       if (!design) return fail('A design that can be made is needed before approval.');
       const v = state.version + 1;
-      return { ...base, version: v, sleeve: r.part === 'Sleeve' ? design : state.sleeve, neckline: r.part === 'Neckline' ? design : state.neckline, request: { ...r, status: 'Approved' }, acknowledged: false, approvedAt: dateOnly(action.at), undo: { version: state.version, sleeve: state.sleeve, neckline: state.neckline, request: r, events: state.events, declined: state.declined }, declined: r.outcome === 'Impossible' ? [...state.declined, `${r.style}, cannot be made · ${dateOnly(action.at)}`] : state.declined, message: `${design} approved. It is now the agreed design (Version ${v}).`, events: [...state.events.map(e => e.status === 'Approved' ? { ...e, status: 'Superseded' as const } : e), { title: `Version ${v} · Customer approved`, text: `${r.part}: ${design} · ${r.cost} · ${r.date}`, status: 'Approved', at: action.at }] };
+      return { ...base, version: v, sleeve: r.part === 'Sleeve' ? design : state.sleeve, neckline: r.part === 'Neckline' ? design : state.neckline, request: { ...r, status: 'Approved' }, acknowledged: false, approvedAt: dateOnly(action.at), undo: { version: state.version, sleeve: state.sleeve, neckline: state.neckline, request: r, events: state.events, declined: state.declined }, declined: r.outcome === 'Impossible' ? [...state.declined, `${requestedLabel(r)}, cannot be made · ${dateOnly(action.at)}`] : state.declined, message: `${design} approved. It is now the agreed design (Version ${v}).`, events: [...state.events.map(e => e.status === 'Approved' ? { ...e, status: 'Superseded' as const } : e), { title: `Version ${v} · Customer approved`, text: `${r.part}: ${design} · ${r.cost} · ${r.date}`, status: 'Approved', at: action.at }] };
     }
     case 'undo': {
       if (!state.undo) return fail('There is no approval to undo.');
@@ -91,7 +95,7 @@ export function workflowReducer(state: Workflow, action: Action): Workflow {
     case 'reject': {
       const r = state.request;
       if (r?.status !== 'Pending') return fail('There is no open request to decline.');
-      const declined = r.outcome === 'Impossible' ? r.alternative ?? r.style : r.style;
+      const declined = r.outcome === 'Impossible' ? r.alternative ?? requestedLabel(r) : requestedLabel(r);
       return { ...base, request: { ...r, status: 'Rejected' }, declined: [...state.declined, `${declined}, declined · ${dateOnly(action.at)}`], message: 'Tailor notified: original design kept.', events: [...state.events, { title: 'Customer kept the original design', text: `Declined: ${declined}. Version ${state.version} stays current.`, status: 'Rejected', at: action.at }] };
     }
     case 'acknowledge': return { ...base, acknowledged: action.value };

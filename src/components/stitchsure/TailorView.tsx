@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { CUSTOMER, ORDER, RELEVANT_MEASUREMENT, outcomeHelp, outcomeLabel, noticeText } from '@/lib/sample';
-import type { Outcome, ProductionStage } from '@/lib/workflow';
+import { requestedLabel, type Outcome, type ProductionStage } from '@/lib/workflow';
 import { Avatar, Card, Chip, ErrorSlot, Facts, Field, Notice, Segmented } from './ui';
 import { Garment } from './Garment';
 import type { StitchSureModel } from './useStitchSure';
@@ -78,11 +78,12 @@ function RequestCard({ m }: { m: StitchSureModel }) {
   }
   const sentAt = [...state.events].reverse().find(e => e.title.endsWith('change requested'))?.at;
   const pending = r.status === 'Pending';
-  const wantSleeve = r.part === 'Sleeve' ? r.style : state.sleeve;
-  const wantNeck = r.part === 'Neckline' ? r.style : state.neckline;
+  const wanted = requestedLabel(r);
+  const wantSleeve = r.part === 'Sleeve' ? wanted : state.sleeve;
+  const wantNeck = r.part === 'Neckline' ? wanted : state.neckline;
   return (
     <Card title="What they want" step="2" className="ss-hcard" aside={<Chip status={r.status === 'Pending' ? 'Waiting for you' : r.status} />}>
-      <p className="ss-ask"><span>{r.part}</span> → <strong>{r.style}</strong></p>
+      <p className="ss-ask"><span>{r.part}</span> → <strong>{wanted}</strong></p>
       {sentAt && <p className="ss-meta">Requested {sentAt}</p>}
       <div className="ss-hbody">
       <div>
@@ -90,7 +91,7 @@ function RequestCard({ m }: { m: StitchSureModel }) {
         <div className="ss-compare" role="group" aria-label="Current design compared with the requested design">
           <figure><Garment small sleeve={state.sleeve} neckline={state.neckline} part={r.part} /><figcaption><span>Now · Version {state.version}</span><strong>{r.part === 'Sleeve' ? state.sleeve : state.neckline}</strong></figcaption></figure>
           <ArrowRight aria-hidden className="ss-compare-arrow" />
-          <figure><Garment small sleeve={wantSleeve} neckline={wantNeck} part={r.part} /><figcaption><span>Requested</span><strong>{r.style}</strong></figcaption></figure>
+          <figure><Garment small sleeve={wantSleeve} neckline={wantNeck} part={r.part} /><figcaption><span>Requested</span><strong>{wanted}</strong></figcaption></figure>
         </div>
       )}
       </div>
@@ -116,11 +117,11 @@ function RequestCard({ m }: { m: StitchSureModel }) {
 function ReviewCard({ m }: { m: StitchSureModel }) {
   const { state, dispatch, review, busy } = m;
   const r = state.request;
-  if (!r) return <Card title="Your review" step="3"><p className="ss-meta">Nothing to review yet.</p></Card>;
-  if (r.status !== 'Pending') return <Card title="Your review" step="3" aside={<Chip status={r.status === 'Rejected' ? 'Declined' : r.status} />}><p className="ss-meta">{r.status === 'Approved' ? `Areeba approved this. Version ${state.version} is now the only version Shayan sees.` : 'Areeba kept her original design. Nothing changes for Shayan.'}</p></Card>;
+  if (!r) return <Card title="Your review" step="3" focusTarget><p className="ss-meta">Nothing to review yet.</p></Card>;
+  if (r.status !== 'Pending') return <Card title="Your review" step="3" focusTarget aside={<Chip status={r.status === 'Rejected' ? 'Declined' : r.status} />}><p className="ss-meta">{r.status === 'Approved' ? `Areeba approved this. Version ${state.version} is now the only version Shayan sees.` : 'Areeba kept her original design. Nothing changes for Shayan.'}</p></Card>;
   if (r.outcome) {
     return (
-      <Card title="Your review" step="3" aside={<Chip status="Pending" />}>
+      <Card title="Your review" step="3" focusTarget aside={<Chip status="Pending" />}>
         <p className="ss-meta">{r.outcome === 'Needs clarification' ? 'Question sent. Waiting for Areeba to reply.' : 'Sent. The request stays open until Areeba decides.'}</p>
         <Facts label="What you sent" rows={[
           { label: 'Outcome', value: outcomeLabel[r.outcome] },
@@ -136,29 +137,31 @@ function ReviewCard({ m }: { m: StitchSureModel }) {
   const ask = o === 'Needs clarification';
   const reasonLabel = o === 'Impossible' ? 'Reason it cannot be made (required)' : 'Note for Areeba (optional)';
   return (
-    <Card title="Your review" step="3" aside={<Chip status="Pending" />}>
+    <Card title="Your review" step="3" focusTarget aside={<Chip status="Pending" />}>
       <Segmented legend="Production stage" value={state.stage} options={STAGES} disabled={busy} onChange={v => dispatch({ type: 'stage', stage: v })} />
       <p className="ss-hint">Cutting and stitching limit which changes are still possible.</p>
       {cutAdvisory && <Notice tone="info">Fabric is already cut. Bell sleeves usually can’t be made now. Consider offering Cuff Trim.</Notice>}
       <ErrorSlot state={state} />
       <Segmented legend="Can this be made?" value={o} options={OUTCOMES} disabled={busy} onChange={review.setOutcome} />
-      <p className="ss-hint">{outcomeHelp[o]}</p>
-      {ask
+      <p className="ss-hint">{o ? outcomeHelp[o] : 'Choose one to continue. Nothing is selected for you.'}</p>
+      {!o ? null : ask
         ? <Field label="Your question to the customer" htmlFor="review-question"><Textarea id="review-question" rows={3} value={review.question} onChange={e => review.setQuestion(e.target.value)} /></Field>
         : <Field label={reasonLabel} htmlFor="review-reason"><Textarea id="review-reason" rows={3} value={review.reason} onChange={e => review.setReason(e.target.value)} /></Field>}
       {o === 'Impossible' && <Field label="Offer this instead (required)" htmlFor="review-alt"><Input id="review-alt" value={review.alternative} onChange={e => review.setAlternative(e.target.value)} /></Field>}
-      {o !== 'Needs clarification' && (
+      {o && !ask && (
         <div className="ss-two">
           <Field label="Cost effect" htmlFor="review-cost"><Input id="review-cost" value={review.cost} onChange={e => review.setCost(e.target.value)} /></Field>
           <Field label="Delivery effect" htmlFor="review-date"><Input id="review-date" value={review.date} onChange={e => review.setDate(e.target.value)} /></Field>
         </div>
       )}
+      {o && (<>
       <div className="ss-preview" aria-label="What Areeba will see">
         <span>Areeba will see</span>
-        <p>{ask ? <>Question: <strong>{review.question || '…'}</strong></> : <><strong>{r.style}</strong>: {outcomeLabel[o]}{o === 'Impossible' && review.alternative ? ` · Offer: ${review.alternative}` : ''} · {review.cost || 'cost?'} · {review.date || 'delivery?'}</>}</p>
+        <p>{ask ? <>Question: <strong>{review.question || '…'}</strong></> : <><strong>{requestedLabel(r)}</strong>: {outcomeLabel[o]}{o === 'Impossible' && review.alternative ? ` · Offer: ${review.alternative}` : ''} · {review.cost || 'cost?'} · {review.date || 'delivery?'}</>}</p>
       </div>
-      <div className="ss-np"><span className="ss-np-label">In-app notice to Areeba (sample, nothing is really sent)</span><p className="ss-np-bubble">{noticeText({ part: r.part, style: r.style, outcome: o, reason: ask ? review.question : review.reason, alternative: review.alternative, cost: review.cost, date: review.date })}</p></div>
-      <div className="ss-actions"><Button disabled={busy} onClick={review.sendReview}><Send />{ask ? 'Send question' : 'Send review to customer'}</Button></div>
+      <div className="ss-np"><span className="ss-np-label">In-app notice to Areeba (sample, nothing is really sent)</span><p className="ss-np-bubble">{noticeText({ part: r.part, style: requestedLabel(r), outcome: o, reason: ask ? review.question : review.reason, alternative: review.alternative, cost: review.cost, date: review.date })}</p></div>
+      </>)}
+      <div className="ss-actions"><Button disabled={busy || !o} onClick={review.sendReview}><Send />{ask ? 'Send question' : 'Send review to customer'}</Button></div>
     </Card>
   );
 }

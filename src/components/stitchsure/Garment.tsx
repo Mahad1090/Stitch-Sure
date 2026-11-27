@@ -39,10 +39,11 @@ export function Garment({ sleeve, neckline, part = '', select, small, label }: P
         {sleeve === 'Cuff Trim' && <><path className="g-trim" d="M31 141L60 162" /><path className="g-trim" d="M309 141L280 162" /></>}
         <circle className="g-button" cx="170" cy={neck.placket + 22} r="2.5" /><circle className="g-button" cx="170" cy={neck.placket + 44} r="2.5" /><circle className="g-button" cx="170" cy={neck.placket + 66} r="2.5" />
       </svg>
+      {/* Pointer shortcuts only: keyboard users choose the part in the form (D5A S-08). */}
       {select && (
         <>
-          <button type="button" className={cn('ss-hotspot ss-hotspot-sleeve', part === 'Sleeve' && 'is-on')} aria-pressed={part === 'Sleeve'} onClick={() => select('Sleeve')}><span aria-hidden className="ss-hotspot-dot" />Sleeve</button>
-          <button type="button" className={cn('ss-hotspot ss-hotspot-neck', part === 'Neckline' && 'is-on')} aria-pressed={part === 'Neckline'} onClick={() => select('Neckline')}><span aria-hidden className="ss-hotspot-dot" />Neckline</button>
+          <button type="button" tabIndex={-1} className={cn('ss-hotspot ss-hotspot-sleeve', part === 'Sleeve' && 'is-on')} aria-pressed={part === 'Sleeve'} onClick={() => select('Sleeve')}><span aria-hidden className="ss-hotspot-dot" />Sleeve</button>
+          <button type="button" tabIndex={-1} className={cn('ss-hotspot ss-hotspot-neck', part === 'Neckline' && 'is-on')} aria-pressed={part === 'Neckline'} onClick={() => select('Neckline')}><span aria-hidden className="ss-hotspot-dot" />Neckline</button>
         </>
       )}
     </div>

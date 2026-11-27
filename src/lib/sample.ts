@@ -80,7 +80,7 @@ export const outcomeLabel: Record<Outcome, string> = {
 export function styleOptions(part: Part, current: string) {
   return [
     ...STYLE_OPTIONS[part].map(o => (o.value === current ? { ...o, label: `${o.label} (current)` } : o)),
-    { value: DESCRIBED, label: DESCRIBED, hint: 'Write what you want in the note below' },
+    { value: DESCRIBED, label: 'Describe it in my own words', hint: 'Write what you want in the note below' },
   ];
 }
 

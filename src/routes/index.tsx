@@ -8,6 +8,7 @@ import { TailorView } from '@/components/stitchsure/TailorView';
 import { WorkerView } from '@/components/stitchsure/WorkerView';
 import { Avatar, Chip, Notice, Segmented, StepRail } from '@/components/stitchsure/ui';
 import { useStitchSure } from '@/components/stitchsure/useStitchSure';
+import { useMediaQuery, useScreenFocus } from '@/components/stitchsure/useScreen';
 import { CUSTOMER_ORDERS, ORDER, PERSONAS } from '@/lib/sample';
 import { activeStep, describe, turn } from '@/lib/status';
 import type { Role } from '@/lib/workflow';
@@ -34,6 +35,29 @@ function StitchSure() {
   const { state, role, busy, sending, banner } = m;
   const persona = PERSONAS[role];
   const { title, next } = describe(state, role, sending);
+  const { customer, worker } = m;
+  const r = state.request;
+  useScreenFocus(
+    role,
+    [customer.screen, customer.showApproved, customer.confirmCancel, worker.reportOpen, r?.status, r?.outcome, r?.seen, r?.answer, state.version, state.stitching, state.finished, state.paused].join('|'),
+    Boolean(state.error) || customer.confirmCancel,
+  );
+  const phone = useMediaQuery('(max-width: 700px)');
+  const rail = <StepRail key="rail" active={activeStep(state)} />;
+  const tiles = (
+    <ul key="tiles" className="ss-tiles" aria-label="Order facts">
+      <li><Clock3 aria-hidden /><span>Production stage</span><strong>{state.stage}</strong></li>
+      <li><FileCheck2 aria-hidden /><span>{role === 'customer' ? 'Agreed design' : 'Current version'}</span><strong>Version {state.version}</strong></li>
+      <li><Check aria-hidden /><span>Delivery</span><strong>{ORDER.delivery}</strong><small className="ss-tile-note">1 day before the mehndi</small></li>
+    </ul>
+  );
+  const task = (
+    <div key="task" className="ss-task">
+      {role === 'customer' && <CustomerView m={m} />}
+      {role === 'tailor' && <TailorView m={m} />}
+      {role === 'worker' && <WorkerView m={m} />}
+    </div>
+  );
   return (
     <div className="ss-app">
       <div className="ss-demo" role="region" aria-label="Prototype controls">
@@ -97,17 +121,8 @@ function StitchSure() {
             <div aria-live="polite" aria-atomic="true">{banner && <Notice tone="ok">{banner}</Notice>}</div>
           </section>
 
-          <StepRail active={activeStep(state)} />
-
-          <ul className="ss-tiles" aria-label="Order facts">
-            <li><Clock3 aria-hidden /><span>Production stage</span><strong>{state.stage}</strong></li>
-            <li><FileCheck2 aria-hidden /><span>{role === 'customer' ? 'Agreed design' : 'Current version'}</span><strong>Version {state.version}</strong></li>
-            <li><Check aria-hidden /><span>Delivery</span><strong>{ORDER.delivery}</strong><small className="ss-tile-note">1 day before the mehndi</small></li>
-          </ul>
-
-          {role === 'customer' && <CustomerView m={m} />}
-          {role === 'tailor' && <TailorView m={m} />}
-          {role === 'worker' && <WorkerView m={m} />}
+          {/* On phones the task comes straight after the status banner (D5A M-26). */}
+          {phone ? [task, rail, tiles] : [rail, tiles, task]}
         </main>
 
         {role !== 'worker' && <Activity events={state.events} />}

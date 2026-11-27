@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { CUSTOMER, ORDER, PART_LABEL, PROBLEM_KINDS, RELEVANT_MEASUREMENT } from '@/lib/sample';
-import { Card, Chip, ErrorSlot, Facts, Field, Notice, OptionList } from './ui';
+import { Card, Chip, ErrorSlot, Facts, Field, Notice, OptionList, focusProps } from './ui';
 import { Garment } from './Garment';
 import type { StitchSureModel } from './useStitchSure';
 
@@ -22,7 +22,7 @@ export function WorkerView({ m }: { m: StitchSureModel }) {
           <span className="ss-current-badge"><ShieldCheck aria-hidden />CURRENT</span>
           <Chip status={state.finished ? 'Finished' : 'Approved'} />
         </header>
-        <h2 id="current-title">Version {state.version} · {ORDER.garment}</h2>
+        <h2 id="current-title" {...focusProps(true)}>Version {state.version} · {ORDER.garment}</h2>
         <p className="ss-meta"><strong>{ORDER.id}</strong> · {ORDER.garment} · {firstName} · Due {ORDER.delivery.replace(', 2026', '')}</p>
         <p className="ss-meta">Approved by customer ({firstName}) on {state.approvedAt}</p>
         <div className="ss-current-body ss-current-3">
@@ -76,7 +76,7 @@ export function WorkerView({ m }: { m: StitchSureModel }) {
 function ReportForm({ m }: { m: StitchSureModel }) {
   const { state, worker } = m;
   return (
-    <Card title="Report a problem" aside={<span className="ss-sample">{ORDER.id} · {ORDER.garment}</span>}>
+    <Card title="Report a problem" focusTarget aside={<span className="ss-sample">{ORDER.id} · {ORDER.garment}</span>}>
       <OptionList legend="What kind of problem?" value={worker.problemKind} options={PROBLEM_KINDS.map(k => ({ value: k, label: k }))} onChange={worker.setProblemKind} />
       <Field label="Describe the problem" htmlFor="problem" hint="Master Mahad gets this in StitchSure. Work on this part goes on hold until he replies."><Textarea id="problem" rows={3} value={worker.problem} onChange={e => worker.setProblem(e.target.value)} placeholder="Name the part and what is wrong…" /></Field>
       <ErrorSlot state={state} />

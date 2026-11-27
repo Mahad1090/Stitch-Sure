@@ -3,13 +3,8 @@ import { initialWorkflow, workflowReducer, type Action, type Outcome, type Part,
 
 const stamp = () => new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
 
-const REVIEW_DEFAULTS = {
-  outcome: 'Impossible' as Outcome,
-  reason: 'Fabric is already cut, so there is not enough width for a flared wrist.',
-  alternative: 'Cuff Trim',
-  cost: 'No extra cost',
-  date: 'Delivery unchanged',
-};
+/** The tailor decides every value: nothing is pre-filled (D5A S-01, S-05, A-18). */
+const BLANK_REVIEW = { outcome: '' as Outcome | '', reason: '', question: '', alternative: '', cost: '', date: '' };
 
 export type CustomerScreen = 'home' | 'form';
 
@@ -37,12 +32,11 @@ export function useStitchSure() {
   useEffect(() => () => { if (sendTimer.current) clearTimeout(sendTimer.current); }, []);
 
   // Tailor review form
-  const [outcome, setOutcome] = useState<Outcome>(REVIEW_DEFAULTS.outcome);
-  const [reason, setReason] = useState(REVIEW_DEFAULTS.reason);
-  const [question, setQuestion] = useState('How long should the sleeves be, in inches?');
-  const [alternative, setAlternative] = useState(REVIEW_DEFAULTS.alternative);
-  const [cost, setCost] = useState(REVIEW_DEFAULTS.cost);
-  const [date, setDate] = useState(REVIEW_DEFAULTS.date);
+  const [draft, setDraft] = useState(BLANK_REVIEW);
+  const edit = (patch: Partial<typeof BLANK_REVIEW>) => setDraft(d => ({ ...d, ...patch }));
+  // A different request, or a customer reply, always starts a blank form. "Seen" alone does not.
+  const requestKey = JSON.stringify([state.request && { ...state.request, seen: false }, state.events.filter(e => e.title.endsWith('change requested')).length]);
+  useEffect(() => { setDraft(BLANK_REVIEW); }, [requestKey]);
 
   // Worker
   const [reportOpen, setReportOpen] = useState(false);
@@ -88,6 +82,8 @@ export function useStitchSure() {
   const cancelRequest = () => { dispatch({ type: 'cancel', at: stamp() }); setConfirmCancel(false); };
 
   const sendReview = () => {
+    const { outcome, reason, question, alternative, cost, date } = draft;
+    if (!outcome) return;
     const ask = outcome === 'Needs clarification';
     dispatch({ type: 'review', outcome, reason: ask ? question : reason, alternative: outcome === 'Impossible' ? alternative : '', cost, date, at: stamp() });
   };
@@ -108,7 +104,7 @@ export function useStitchSure() {
     setRole('customer'); setScreen('home'); setShowApproved(false); setConfirmCancel(false); setAnswer('');
     setPart(''); setStyle(''); setNote(''); setReference(false);
     setReportOpen(false); setProblem(''); setProblemKind(''); setShowEarlier(false);
-    setOutcome(REVIEW_DEFAULTS.outcome); setReason(REVIEW_DEFAULTS.reason); setAlternative(REVIEW_DEFAULTS.alternative); setCost(REVIEW_DEFAULTS.cost); setDate(REVIEW_DEFAULTS.date);
+    setDraft(BLANK_REVIEW);
   };
 
   const busy = sending;
@@ -116,7 +112,16 @@ export function useStitchSure() {
     state, dispatch, role, chooseRole: switchRole, navOpen, setNavOpen, banner, busy, sending,
     customer: { screen, openForm, backToOrder, confirmCancel, setConfirmCancel, cancelRequest, answer, setAnswer, sendAnswer, showApproved, setShowApproved },
     form: { part, style, note, setNote, reference, choosePart, chooseStyle, toggleReference, sendRequest },
-    review: { outcome, setOutcome, reason, setReason, question, setQuestion, alternative, setAlternative, cost, setCost, date, setDate, sendReview },
+    review: {
+      ...draft, sendReview,
+      /** Changing the outcome clears every field, so no text from another outcome is sent. */
+      setOutcome: (outcome: Outcome) => setDraft({ ...BLANK_REVIEW, outcome }),
+      setReason: (reason: string) => edit({ reason }),
+      setQuestion: (question: string) => edit({ question }),
+      setAlternative: (alternative: string) => edit({ alternative }),
+      setCost: (cost: string) => edit({ cost }),
+      setDate: (date: string) => edit({ date }),
+    },
     decide: { approve, undoApproval, keepOriginal, markSeen },
     worker: { reportOpen, setReportOpen, problemKind, setProblemKind, problem, setProblem, sendReport, showEarlier, setShowEarlier },
     reset,

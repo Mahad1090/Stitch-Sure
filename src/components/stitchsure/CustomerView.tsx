@@ -3,8 +3,8 @@ import { ArrowLeft, Check, ChevronRight, LoaderCircle, Send, Upload, Undo2, X } 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { CUSTOMER, NOTE_PLACEHOLDER, ORDER, PART_LABEL, styleOptions } from '@/lib/sample';
-import { DESCRIBED } from '@/lib/workflow';
-import { Card, Chip, ErrorSlot, Facts, Field, Notice, OptionList, Segmented } from './ui';
+import { DESCRIBED, requestedLabel } from '@/lib/workflow';
+import { Card, Chip, Disclosure, ErrorSlot, Facts, Field, Notice, OptionList, Segmented, UndoNotice } from './ui';
 import { Garment } from './Garment';
 import type { StitchSureModel } from './useStitchSure';
 
@@ -39,7 +39,8 @@ function OrderCard({ m }: { m: StitchSureModel }) {
   const locked = state.stitching || state.paused;
   const selecting = customer.screen === 'form' && !r?.outcome && r?.status !== 'Pending';
   return (
-    <Card title="Your order" className="ss-ordercard" aside={<Chip status={`Agreed · Version ${state.version}`} />}>
+    <Card title="Your order" focusTarget={home} className="ss-ordercard" aside={<Chip status={`Agreed · Version ${state.version}`} />}>
+      {home && state.undo && !state.stitching && !state.finished && <UndoNotice disabled={busy} onUndo={m.decide.undoApproval} />}
       {r?.status === 'Rejected' && home && <Notice tone="ok">Tailor notified: original design kept.</Notice>}
       <div className="ss-order-body">
       <div className="ss-order-pic">
@@ -110,7 +111,7 @@ function RequestForm({ m }: { m: StitchSureModel }) {
   const described = form.style === DESCRIBED;
   const styleError = !!state.error && /style/i.test(state.error);
   return (
-    <Card title="Request a change" aside={<Button variant="link" className="ss-link" onClick={customer.backToOrder}><ArrowLeft aria-hidden />Back to order</Button>}>
+    <Card title="Request a change" focusTarget aside={<Button variant="link" className="ss-link" onClick={customer.backToOrder}><ArrowLeft aria-hidden />Back to order</Button>}>
       <ErrorSlot state={state} />
       <Segmented legend="1. Which part?" value={form.part} options={[{ value: 'Sleeve', label: PART_LABEL.Sleeve }, { value: 'Neckline', label: PART_LABEL.Neckline }]} onChange={form.choosePart} />
       {form.part
@@ -134,12 +135,15 @@ function WaitingCard({ m }: { m: StitchSureModel }) {
   const { state, customer, busy } = m;
   const r = state.request!;
   return (
-    <Card title="Your request" aside={<Chip status="Waiting for the tailor" />}>
-      <p className="ss-ask"><span>{PART_LABEL[r.part]}</span> {r.part === 'Sleeve' ? state.sleeve : state.neckline} → <strong>{r.style}</strong></p>
+    <Card title="Your request" focusTarget aside={<Chip status="Waiting for the tailor" />}>
+      <p className="ss-ask"><span>{PART_LABEL[r.part]}</span> {r.part === 'Sleeve' ? state.sleeve : state.neckline} → <strong>{requestedLabel(r)}</strong></p>
       <p className="ss-meta">{r.note ? `Note: “${r.note}”` : 'No note added.'}{r.reference ? ' · Reference photo attached' : ''}</p>
       {r.answer && <p className="ss-meta">Your reply: “{r.answer}”</p>}
       <Notice tone="info">Your agreed design (Version {state.version}) stays the same. Nothing is stitched from your request until you both agree.</Notice>
       <ErrorSlot state={state} />
+      <Disclosure label="What happens next">
+        <p className="ss-meta">Master Mahad checks whether it can be made, and what it changes in cost and delivery. Then you approve it or keep your agreed design.</p>
+      </Disclosure>
       {!customer.confirmCancel
         ? <div className="ss-actions"><Button variant="outline" disabled={busy} onClick={() => customer.setConfirmCancel(true)}><X />Cancel request</Button></div>
         : <div className="ss-confirm-box" role="group" aria-labelledby="cancel-q">
@@ -158,9 +162,9 @@ function QuestionCard({ m }: { m: StitchSureModel }) {
   const { state, customer, busy } = m;
   const r = state.request!;
   return (
-    <Card title="Master Mahad asked" aside={<Chip status="Waiting for you" />}>
+    <Card title="Master Mahad asked" focusTarget aside={<Chip status="Waiting for you" />}>
       <blockquote className="ss-quote">“{r.reason}”</blockquote>
-      <p className="ss-meta">About your request: {PART_LABEL[r.part]} → {r.style}</p>
+      <p className="ss-meta">About your request: {PART_LABEL[r.part]} → {requestedLabel(r)}</p>
       <Field label="Your answer" htmlFor="req-answer"><Textarea id="req-answer" rows={3} value={customer.answer} onChange={e => customer.setAnswer(e.target.value)} placeholder="e.g. 22 inches, same as before" /></Field>
       <ErrorSlot state={state} />
       <div className="ss-actions"><Button disabled={busy} onClick={customer.sendAnswer}><Send />Reply</Button></div>
@@ -173,15 +177,15 @@ function DecisionCard({ m }: { m: StitchSureModel }) {
   const { state, decide, busy } = m;
   const r = state.request!;
   const impossible = r.outcome === 'Impossible';
-  const offer = impossible ? r.alternative ?? '' : r.style;
+  const offer = impossible ? r.alternative ?? '' : requestedLabel(r);
   const now = r.part === 'Sleeve' ? state.sleeve : state.neckline;
   return (
-    <Card title="Choose an option" aside={<Chip status="Waiting for you" />}>
+    <Card title="Choose an option" focusTarget aside={<Chip status="Waiting for you" />}>
       <p className="ss-meta">{PART_LABEL[r.part]}: {now} → {offer}</p>
       <div className="ss-options-pair">
         <div className={impossible ? 'ss-offer ss-offer-no' : 'ss-offer'}>
           <span className="ss-eyebrow">You asked for</span>
-          <h3>{impossible ? <s>{r.style}</s> : r.style}</h3>
+          <h3>{impossible ? <s>{requestedLabel(r)}</s> : requestedLabel(r)}</h3>
           <Chip status={impossible ? 'Cannot be made' : 'Can be made'} />
           {r.reason && <p>{r.reason}</p>}
         </div>
@@ -207,7 +211,7 @@ function DecisionCard({ m }: { m: StitchSureModel }) {
 function ApprovedCard({ m }: { m: StitchSureModel }) {
   const { state, customer, decide, busy } = m;
   return (
-    <Card title={`${state.request?.part === 'Sleeve' ? state.sleeve : state.neckline} approved`} aside={<Chip status="Approved" />}>
+    <Card title={`${state.request?.part === 'Sleeve' ? state.sleeve : state.neckline} approved`} focusTarget aside={<Chip status="Approved" />}>
       <Notice tone="ok">This is now your agreed design (Version {state.version}). The worker can see it. Your old design (Version {state.version - 1}) is replaced.</Notice>
       <p><strong>Your agreed design:</strong> {state.sleeve} · {state.neckline} · Due {ORDER.delivery}</p>
       <p className="ss-meta">{state.stitching ? 'The worker has started stitching.' : 'The worker has not started yet.'}</p>

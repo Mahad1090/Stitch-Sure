@@ -685,3 +685,7 @@ body::before{display:none}
 @media (max-height:1000px){.ss-app::before{width:280px;height:544px;bottom:24px;right:10px}}
 @media (max-width:1100px){.ss-app::before{width:240px;height:467px}}
 @media (max-width:700px){.ss-app::before{display:none}}
+
+.ss-task { min-width: 0; }
+@media (max-width: 700px) { .ss-task { margin-bottom: 16px; } }
+.ss-undo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; padding: 12px 14px; border: 1.5px solid var(--ink); border-radius: 14px; }

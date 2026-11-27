@@ -1,5 +1,6 @@
-import { forwardRef, useEffect, useId, useRef, type ReactNode } from 'react';
-import { Check, CircleAlert, Clock3, Layers, X } from 'lucide-react';
+import { forwardRef, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { Check, ChevronRight, CircleAlert, Clock3, Layers, Undo2, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { STEPS } from '@/lib/status';
 
@@ -17,14 +18,39 @@ export function Avatar({ initials, size = 'md' }: { initials: string; size?: 'md
   return <span className={cn('ss-avatar', size === 'lg' && 'ss-avatar-lg')} aria-hidden>{initials}</span>;
 }
 
+/** Marks a heading as the place focus moves to after a screen change (D5A S-04). */
+export const focusProps = (on: boolean | undefined) => (on ? { tabIndex: -1, 'data-focus-target': true } : {});
+
+/** Progressive disclosure: a button that shows or hides extra detail. */
+export function Disclosure({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <div className="ss-disclosure">
+      <Button variant="link" className="ss-link" aria-expanded={open} aria-controls={id} onClick={() => setOpen(v => !v)}>{label}<ChevronRight className={open ? 'rotate-90' : 'ss-flip'} aria-hidden /></Button>
+      <div id={id} hidden={!open}>{open && children}</div>
+    </div>
+  );
+}
+
+/** The undo promised at approval, shown wherever the customer lands until stitching starts (D5A M-03). */
+export function UndoNotice({ onUndo, disabled }: { onUndo: () => void; disabled?: boolean | undefined }) {
+  return (
+    <div className="ss-undo">
+      <p>You can still undo your last approval. This ends when the worker starts stitching.</p>
+      <Button variant="outline" disabled={disabled} onClick={onUndo}><Undo2 aria-hidden />Undo approval</Button>
+    </div>
+  );
+}
+
 /** A bordered group: one idea per card (common region). */
-export function Card({ title, step, aside, children, className, id }: { title: string; step?: string; aside?: ReactNode; children: ReactNode; className?: string; id?: string }) {
+export function Card({ title, step, aside, children, className, id, focusTarget }: { title: string; step?: string; aside?: ReactNode; children: ReactNode; className?: string; id?: string; /** This card's heading receives focus after a screen change. */ focusTarget?: boolean }) {
   const hid = useId();
   return (
     <section id={id} className={cn('ss-card', className)} aria-labelledby={hid}>
       <header className="ss-card-head">
         {step && <span className="ss-step-badge" aria-hidden>{step}</span>}
-        <h2 id={hid}>{title}</h2>
+        <h2 id={hid} {...focusProps(focusTarget)}>{title}</h2>
         {aside && <div className="ss-card-aside">{aside}</div>}
       </header>
       {children}
