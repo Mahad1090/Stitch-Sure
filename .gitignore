@@ -147,3 +147,9 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Local-only files, not to be pushed
+/D5_PartA_findings.txt
+/D5_evidence/
+/D5_evidence_new/
+/D5_screenshots.zip
