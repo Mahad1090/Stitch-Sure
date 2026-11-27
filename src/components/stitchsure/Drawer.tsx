@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Check, ChevronRight, Scissors, ShieldCheck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CUSTOMER_ORDERS, ORDER } from '@/lib/sample';
-import { t, term } from '@/lib/i18n';
+import { useLang } from '@/lib/i18n';
 import type { StitchSureModel } from './useStitchSure';
 
 /**
@@ -10,6 +10,7 @@ import type { StitchSureModel } from './useStitchSure';
  * Escape closes it, and focus returns to the control that opened it.
  */
 export function Drawer({ m }: { m: StitchSureModel }) {
+  const { t, term } = useLang();
   const { state, role, setNavOpen } = m;
   const close = useRef<HTMLButtonElement>(null);
   const shut = useRef(() => setNavOpen(false));

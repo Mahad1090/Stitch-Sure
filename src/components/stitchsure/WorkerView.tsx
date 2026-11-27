@@ -3,13 +3,14 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { CUSTOMER, ORDER, PROBLEM_KINDS, RELEVANT_MEASUREMENT } from '@/lib/sample';
-import { t, term } from '@/lib/i18n';
+import { useLang } from '@/lib/i18n';
 import { Card, Chip, Disclosure, ErrorSlot, Facts, Field, Notice, OptionList, focusProps } from './ui';
 import { Garment } from './Garment';
 import type { StitchSureModel } from './useStitchSure';
 
 /** Worker portal: the job, and nothing else (critique rows 28–33). */
 export function WorkerView({ m }: { m: StitchSureModel }) {
+  const { t, term, msg } = useLang();
   const { state, dispatch, worker, busy } = m;
   const r = state.request;
   const pending = r?.status === 'Pending';
@@ -34,7 +35,7 @@ export function WorkerView({ m }: { m: StitchSureModel }) {
             { label: t('part.Neckline'), value: <strong className="ss-big">{term(state.neckline)}</strong> },
             { label: t('fact.fabric'), value: term(ORDER.fabric) },
             { label: t('fact.due'), value: <bdi dir="ltr">{ORDER.delivery}</bdi> },
-            ...(r?.status === 'Approved' && r.note ? [{ label: t('worker.notes'), value: `“${r.note}”` }] : []),
+            ...(r?.status === 'Approved' && r.note ? [{ label: t('worker.notes'), value: <bdi>“{r.note}”</bdi> }] : []),
           ]} />
         </div>
         {pending && <Notice tone="info">{t('worker.pending')}</Notice>}
@@ -61,7 +62,7 @@ export function WorkerView({ m }: { m: StitchSureModel }) {
           {replaced.length > 0 && (
             <Disclosure label={t('worker.earlier')}>
               <ul className="ss-superseded">
-                {replaced.map((e, i) => <li key={i}><div><s>{e.title}</s><p>{e.text}</p><p><strong>{t('worker.doNotUse')}</strong></p></div><Chip status="Superseded" /></li>)}
+                {replaced.map((e, i) => <li key={i}><div><s>{e.msg ? msg(e.msg.title) : e.title}</s><p>{e.msg ? msg(e.msg.text) : e.text}</p><p><strong>{t('worker.doNotUse')}</strong></p></div><Chip status="Superseded" /></li>)}
               </ul>
             </Disclosure>
           )}
@@ -74,6 +75,7 @@ export function WorkerView({ m }: { m: StitchSureModel }) {
 
 /** W3: say what is wrong, send it, and know what happens next (row 32). */
 function ReportForm({ m }: { m: StitchSureModel }) {
+  const { t, term } = useLang();
   const { state, worker } = m;
   return (
     <Card title={t('worker.report')} focusTarget className="ss-narrow">

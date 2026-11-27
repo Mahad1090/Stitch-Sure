@@ -10,6 +10,8 @@ import {
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import urduRegular from "@fontsource/noto-nastaliq-urdu/arabic-400.css?url";
+import urduBold from "@fontsource/noto-nastaliq-urdu/arabic-700.css?url";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -80,6 +82,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
+      // Self-hosted; the browser fetches the font only when Urdu text is shown.
+      { rel: "stylesheet", href: urduRegular },
+      { rel: "stylesheet", href: urduBold },
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],

@@ -3,7 +3,7 @@ import { ArrowLeft, Check, ClipboardList, LoaderCircle, MessageSquare, PencilRul
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { CUSTOMER, ORDER, STYLE_OPTIONS } from '@/lib/sample';
-import { t, term } from '@/lib/i18n';
+import { useLang } from '@/lib/i18n';
 import { DESCRIBED, requestedLabel, type Part } from '@/lib/workflow';
 import { Card, Chip, Disclosure, ErrorSlot, Facts, Field, Notice, OptionList, UndoNotice, focusProps } from './ui';
 import { Garment } from './Garment';
@@ -25,16 +25,19 @@ export function CustomerView({ m }: { m: StitchSureModel }) {
   return <HomeCard m={m} />;
 }
 
-function BackLink({ m, label = t('back.choices') }: { m: StitchSureModel; label?: string }) {
-  return <Button variant="link" className="ss-link" disabled={m.busy} onClick={() => m.customer.go('home')}><ArrowLeft className="ss-flip" aria-hidden />{label}</Button>;
+function BackLink({ m, label }: { m: StitchSureModel; label?: string }) {
+  const { t } = useLang();
+  return <Button variant="link" className="ss-link" disabled={m.busy} onClick={() => m.customer.go('home')}><ArrowLeft className="ss-flip" aria-hidden />{label ?? t('back.choices')}</Button>;
 }
 
 function SeeOrder({ m }: { m: StitchSureModel }) {
+  const { t } = useLang();
   return <Button variant="link" className="ss-link" onClick={() => m.customer.go('order')}><ClipboardList aria-hidden />{t('home.order')}</Button>;
 }
 
 /** C1: one question, three choices. */
 function HomeCard({ m }: { m: StitchSureModel }) {
+  const { t, term } = useLang();
   const { state, customer, decide, busy } = m;
   const locked = state.stitching || state.paused;
   return (
@@ -71,6 +74,7 @@ function Choice({ id, icon, title, help, locked, onClick }: { id: string; icon: 
 
 /** C6 / C7: design details and history, only when asked for. */
 function OrderScreen({ m }: { m: StitchSureModel }) {
+  const { t, term, msg } = useLang();
   const { state, customer } = m;
   const r = state.request;
   const earlier = state.events.filter(e => e.status === 'Superseded');
@@ -85,7 +89,7 @@ function OrderScreen({ m }: { m: StitchSureModel }) {
             { label: t('fact.neckline'), value: term(state.neckline) },
             { label: t('fact.fabric'), value: term(ORDER.fabric) },
             { label: t('fact.reference'), value: r?.reference && r.status === 'Approved' ? t('fact.referenceFile') : t('fact.none') },
-            { label: t('fact.note'), value: r?.status === 'Approved' && r.note ? `“${r.note}”` : t('fact.none') },
+            { label: t('fact.note'), value: r?.status === 'Approved' && r.note ? <bdi>“{r.note}”</bdi> : t('fact.none') },
             { label: t('fact.due'), value: <bdi dir="ltr">{ORDER.delivery}</bdi> },
             { label: t('fact.neededFor'), value: <>{term(ORDER.event)}, <bdi dir="ltr">{ORDER.eventDate}</bdi></> },
           ]} />
@@ -97,12 +101,12 @@ function OrderScreen({ m }: { m: StitchSureModel }) {
       <Card title={t('history.title')}>
         <Disclosure label={t('history.earlier', { count: earlier.length })}>
           {earlier.length
-            ? <ul className="ss-list">{earlier.map((e, i) => <li key={i}><s>{e.title}</s> <span className="ss-meta">· {e.text} · {t('history.replaced')}</span></li>)}</ul>
+            ? <ul className="ss-list">{earlier.map((e, i) => <li key={i}><s>{e.msg ? msg(e.msg.title) : e.title}</s> <span className="ss-meta">· {e.msg ? msg(e.msg.text) : e.text} · {t('history.replaced')}</span></li>)}</ul>
             : <p className="ss-meta">{t('history.noEarlier')}</p>}
         </Disclosure>
         <Disclosure label={t('history.declined', { count: state.declined.length })}>
           {state.declined.length
-            ? <ul className="ss-list">{state.declined.map((d, i) => <li key={i}>{d}</li>)}</ul>
+            ? <ul className="ss-list">{state.declinedMsgs.map((d, i) => <li key={i}>{msg(d)}</li>)}</ul>
             : <p className="ss-meta">{t('history.noDeclined')}</p>}
         </Disclosure>
       </Card>
@@ -112,6 +116,7 @@ function OrderScreen({ m }: { m: StitchSureModel }) {
 
 /** One box and one button. Messaging is simulated. */
 function MessageCard({ m }: { m: StitchSureModel }) {
+  const { t } = useLang();
   const [text, setText] = useState('');
   const [sent, setSent] = useState(false);
   return (
@@ -131,6 +136,7 @@ function MessageCard({ m }: { m: StitchSureModel }) {
 
 /** C2: one question per screen. Choices are kept when going back. */
 function RequestForm({ m }: { m: StitchSureModel }) {
+  const { t, term } = useLang();
   const { state, form, sending, busy } = m;
   const { step, part, style } = form;
   const current = part === 'Sleeve' ? state.sleeve : part === 'Neckline' ? state.neckline : '';
@@ -168,7 +174,7 @@ function RequestForm({ m }: { m: StitchSureModel }) {
           </div>
           <div className="ss-preview">
             <span>{t('form.asking')}</span>
-            <p><strong>{t(`part.${part}`)}: {term(current)} → {described ? `“${form.note.trim() || '…'}”` : term(style)}</strong></p>
+            <p><strong>{t(`part.${part}`)}: {term(current)} {t('arrow')} {described ? `“${form.note.trim() || '…'}”` : term(style)}</strong></p>
             <p>{t('form.nothingChanges')}</p>
           </div>
         </>
@@ -186,11 +192,12 @@ function RequestForm({ m }: { m: StitchSureModel }) {
 
 /** C3: whose turn it is, and a way to back out (with confirmation). */
 function WaitingCard({ m }: { m: StitchSureModel }) {
+  const { t, term } = useLang();
   const { state, customer, busy } = m;
   const r = state.request!;
   return (
     <Card title={t('waiting.title')} focusTarget className="ss-narrow" aside={<Chip status="Waiting for the tailor" />}>
-      <p className="ss-ask"><span>{t(`part.${r.part}`)}:</span> {term(r.part === 'Sleeve' ? state.sleeve : state.neckline)} → <strong>{term(requestedLabel(r))}</strong></p>
+      <p className="ss-ask"><span>{t(`part.${r.part}`)}:</span> {term(r.part === 'Sleeve' ? state.sleeve : state.neckline)} {t('arrow')} <strong>{term(requestedLabel(r))}</strong></p>
       <p className="ss-meta">{r.note ? t('waiting.note', { note: r.note }) : t('waiting.noNote')}{r.reference ? ` · ${t('waiting.photo')}` : ''}</p>
       {r.answer && <p className="ss-meta">{t('waiting.reply', { answer: r.answer })}</p>}
       <Notice tone="info">{t('waiting.same', { version: state.version })}</Notice>
@@ -213,11 +220,12 @@ function WaitingCard({ m }: { m: StitchSureModel }) {
 
 /** C1-Q: the tailor's question, answered in place (critique rows 10, 11). */
 function QuestionCard({ m }: { m: StitchSureModel }) {
+  const { t, term } = useLang();
   const { state, customer, busy } = m;
   const r = state.request!;
   return (
     <Card title={t('question.title')} focusTarget className="ss-narrow" aside={<Chip status="Waiting for you" />}>
-      <blockquote className="ss-quote">“{r.reason}”</blockquote>
+      <blockquote className="ss-quote"><bdi>“{r.reason}”</bdi></blockquote>
       <p className="ss-meta">{t('question.about', { part: t(`part.${r.part}`), style: term(requestedLabel(r)) })}</p>
       <Field label={t('question.answer')} htmlFor="req-answer"><Textarea id="req-answer" rows={3} value={customer.answer} onChange={e => customer.setAnswer(e.target.value)} placeholder={t('question.placeholder')} /></Field>
       <ErrorSlot state={state} />
@@ -229,6 +237,7 @@ function QuestionCard({ m }: { m: StitchSureModel }) {
 
 /** C4: both choices carry equal weight (row 16); plain words (rows 19, 25); a preview of the offer (row 3). */
 function DecisionCard({ m }: { m: StitchSureModel }) {
+  const { t, term } = useLang();
   const { state, decide, busy } = m;
   const r = state.request!;
   const impossible = r.outcome === 'Impossible';
@@ -241,18 +250,18 @@ function DecisionCard({ m }: { m: StitchSureModel }) {
           <span className="ss-eyebrow">{t('decision.asked')}</span>
           <h3><s>{term(requestedLabel(r))}</s></h3>
           <Chip status="Cannot be made" />
-          {r.reason && <p>{r.reason}</p>}
+          {r.reason && <p><bdi>{r.reason}</bdi></p>}
         </div>
       )}
       <div className="ss-offer ss-offer-yes">
         <span className="ss-eyebrow">{t(impossible ? 'decision.other' : 'decision.confirms')}</span>
         <h3>{term(offer)}</h3>
         <Chip status="Can be made" />
-        {!impossible && r.reason && <p>{r.reason}</p>}
+        {!impossible && r.reason && <p><bdi>{r.reason}</bdi></p>}
         <figure className="ss-offer-preview"><Garment small sleeve={r.part === 'Sleeve' ? offer : state.sleeve} neckline={r.part === 'Neckline' ? offer : state.neckline} part={r.part} /><figcaption>{t('decision.preview', { style: term(offer) })}</figcaption></figure>
         <dl className="ss-effects">
-          <div><dt>{t('decision.cost')}</dt><dd>{r.cost}</dd></div>
-          <div><dt>{t('decision.dateChange')}</dt><dd>{unchanged ? t('fact.none') : r.date}</dd></div>
+          <div><dt>{t('decision.cost')}</dt><dd><bdi>{r.cost}</bdi></dd></div>
+          <div><dt>{t('decision.dateChange')}</dt><dd><bdi>{unchanged ? t('fact.none') : r.date}</bdi></dd></div>
         </dl>
         {unchanged && <p className="ss-hint">{t('decision.stillReady', { event: term(ORDER.event), date: ORDER.eventDate })}</p>}
       </div>
@@ -268,6 +277,7 @@ function DecisionCard({ m }: { m: StitchSureModel }) {
 
 /** C5: confirmation, a summary, and a clearly bounded undo (rows 5, 26). */
 function ApprovedCard({ m }: { m: StitchSureModel }) {
+  const { t, term } = useLang();
   const { state, customer, decide, busy } = m;
   const design = state.request?.part === 'Neckline' ? state.neckline : state.sleeve;
   return (

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { CUSTOMER, ORDER, RELEVANT_MEASUREMENT, noticeText } from '@/lib/sample';
-import { t, term } from '@/lib/i18n';
+import { useLang } from '@/lib/i18n';
 import { requestedLabel, type Outcome, type ProductionStage } from '@/lib/workflow';
 import { Timeline } from './Activity';
 import { Avatar, Card, Chip, Disclosure, ErrorSlot, Facts, Field, Notice, OptionList, Segmented, focusProps } from './ui';
@@ -15,13 +15,16 @@ const OUTCOMES: Outcome[] = ['Possible', 'Impossible', 'Needs clarification'];
 
 /** One decision at a time: what the customer wants, then the review. Everything else is behind a disclosure. */
 export function TailorView({ m }: { m: StitchSureModel }) {
+  const { t, msg } = useLang();
   const { state, worker } = m;
   const r = state.request;
+  // Stored titles are always English, whatever language is on screen.
+  const report = [...state.events].reverse().find(e => e.title === 'Worker reported a problem');
   return (
     <div className="ss-stack ss-narrow">
       {state.paused && (
         <Card title={t('tailor.problem.title')} aside={<Chip status="Waiting for you" />}>
-          <blockquote className="ss-quote">“{[...state.events].reverse().find(e => e.title === 'Worker reported a problem')?.text}”</blockquote>
+          <blockquote className="ss-quote"><bdi>“{report?.msg ? msg(report.msg.text) : report?.text}”</bdi></blockquote>
           <p className="ss-meta">{t('tailor.problem.hold')}</p>
           <div className="ss-actions"><Button variant="outline" onClick={worker.resolveProblem}>{t('tailor.problem.solve')}</Button></div>
         </Card>
@@ -34,6 +37,7 @@ export function TailorView({ m }: { m: StitchSureModel }) {
 }
 
 function RequestCard({ m }: { m: StitchSureModel }) {
+  const { t, term } = useLang();
   const { state, decide, busy } = m;
   const r = state.request;
   if (!r) {
@@ -61,8 +65,8 @@ function RequestCard({ m }: { m: StitchSureModel }) {
         </div>
       )}
       <h3 className="ss-subhead">{t('tailor.note')}</h3>
-      {r.note ? <blockquote className="ss-quote">“{r.note}”</blockquote> : <p className="ss-meta">{t('waiting.noNote')}</p>}
-      {r.answer && <><h3 className="ss-subhead">{t('tailor.reply')}</h3><blockquote className="ss-quote">“{r.answer}”</blockquote></>}
+      {r.note ? <blockquote className="ss-quote"><bdi>“{r.note}”</bdi></blockquote> : <p className="ss-meta">{t('waiting.noNote')}</p>}
+      {r.answer && <><h3 className="ss-subhead">{t('tailor.reply')}</h3><blockquote className="ss-quote"><bdi>“{r.answer}”</bdi></blockquote></>}
       <h3 className="ss-subhead">{t('tailor.photo')}</h3>
       {r.reference
         ? <div className="ss-ref"><span className="ss-ref-thumb" aria-hidden><Garment small sleeve={r.part === 'Sleeve' ? wanted : 'Straight sleeve'} neckline={r.part === 'Neckline' ? wanted : 'Round neckline'} /></span><span><strong><bdi dir="ltr">{r.part === 'Sleeve' ? 'sleeve' : 'neckline'}-reference.jpg</bdi></strong><small>{t('tailor.photoSample')}</small></span></div>
@@ -79,6 +83,7 @@ function RequestCard({ m }: { m: StitchSureModel }) {
 }
 
 function ReviewCard({ m }: { m: StitchSureModel }) {
+  const { t, term, lang } = useLang();
   const { state, dispatch, review, busy } = m;
   const r = state.request!;
   if (r.status !== 'Pending') {
@@ -95,9 +100,9 @@ function ReviewCard({ m }: { m: StitchSureModel }) {
         <p className="ss-meta">{t(ask ? 'review.waitingReply' : 'review.waitingDecision')}</p>
         <Facts label={t('review.sentLabel')} rows={[
           { label: t('review.field.outcome'), value: t(`outcome.${r.outcome}`) },
-          { label: t(ask ? 'review.field.question' : 'review.field.reason'), value: r.reason || t('fact.none') },
+          { label: t(ask ? 'review.field.question' : 'review.field.reason'), value: <bdi>{r.reason || t('fact.none')}</bdi> },
           ...(r.alternative ? [{ label: t('review.field.alternative'), value: term(r.alternative) }] : []),
-          ...(ask ? [] : [{ label: t('review.field.cost'), value: r.cost ?? '' }, { label: t('review.field.delivery'), value: r.date ?? '' }]),
+          ...(ask ? [] : [{ label: t('review.field.cost'), value: <bdi>{r.cost}</bdi> }, { label: t('review.field.delivery'), value: <bdi>{r.date}</bdi> }]),
         ]} />
       </Card>
     );
@@ -124,7 +129,7 @@ function ReviewCard({ m }: { m: StitchSureModel }) {
       {o && (
         <div className="ss-np">
           <span className="ss-np-label">{t('review.preview')}</span>
-          <p className="ss-np-bubble">{noticeText({ part: r.part, style: requestedLabel(r), outcome: o, reason: ask ? review.question : review.reason, alternative: review.alternative, cost: review.cost, date: review.date })}</p>
+          <p className="ss-np-bubble">{noticeText({ part: r.part, style: requestedLabel(r), outcome: o, reason: ask ? review.question : review.reason, alternative: review.alternative, cost: review.cost, date: review.date }, lang)}</p>
           <p className="ss-hint">{t('review.simulated')}</p>
         </div>
       )}
@@ -139,6 +144,7 @@ function ReviewCard({ m }: { m: StitchSureModel }) {
 
 /** Secondary information, closed until asked for. */
 function MoreCard({ m }: { m: StitchSureModel }) {
+  const { t, term } = useLang();
   const { state } = m;
   const part = state.request?.part;
   const key = part ? RELEVANT_MEASUREMENT[part] : undefined;

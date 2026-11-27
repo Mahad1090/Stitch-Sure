@@ -3,7 +3,7 @@ import { Check, ChevronRight, CircleAlert, Clock3, Layers, Undo2, X } from 'luci
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { STEPS } from '@/lib/status';
-import { t, type Key } from '@/lib/i18n';
+import { useLang, type Key, type Msg } from '@/lib/i18n';
 
 export type Status =
   | 'Approved' | 'Pending' | 'Rejected' | 'Superseded' | 'Can be made' | 'Cannot be made' | 'Declined' | 'Finished'
@@ -13,6 +13,7 @@ export type Status =
 const OK: Status[] = ['Approved', 'Can be made', 'Finished', 'Agreed'];
 const BAD: Status[] = ['Rejected', 'Cannot be made', 'Declined'];
 export function Chip({ status, version }: { status: Status; version?: number }) {
+  const { t } = useLang();
   const tone = OK.includes(status) ? 'ok' : BAD.includes(status) ? 'bad' : status === 'Superseded' ? 'off' : 'wait';
   const Icon = tone === 'ok' ? Check : tone === 'bad' ? X : tone === 'off' ? Layers : Clock3;
   return <span className={cn('ss-chip', `ss-chip-${tone}`)}><Icon aria-hidden />{t(`status.${status}` as Key, version ? { version } : undefined)}</span>;
@@ -53,6 +54,7 @@ export function Disclosure({ label, children }: { label: string; children: React
 
 /** The undo promised at approval, shown wherever the customer lands until stitching starts (D5A M-03). */
 export function UndoNotice({ onUndo, disabled }: { onUndo: () => void; disabled?: boolean | undefined }) {
+  const { t } = useLang();
   return (
     <div className="ss-undo">
       <p>{t('undo.text')}</p>
@@ -129,6 +131,7 @@ export const Notice = forwardRef<HTMLDivElement, { tone: 'info' | 'ok' | 'bad'; 
 });
 
 export function StepRail({ active }: { active: number }) {
+  const { t } = useLang();
   return (
     <div className="ss-rail-wrap">
       <p className="ss-rail-label" id="rail-label">{t('rail.label')}{active < 0 && <span>{t('rail.none')}</span>}</p>
@@ -147,12 +150,13 @@ export function StepRail({ active }: { active: number }) {
 }
 
 /** Errors appear next to the action that caused them, and take focus so they are announced. */
-export function ErrorSlot({ state }: { state: { error: string } }) {
+export function ErrorSlot({ state }: { state: { error: string; errorMsg?: Msg | undefined } }) {
+  const { msg } = useLang();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!state.error) return;
     ref.current?.focus();
     ref.current?.scrollIntoView?.({ block: 'nearest' });
   }, [state]);
-  return state.error ? <Notice ref={ref} tone="bad" role="alert">{state.error}</Notice> : null;
+  return state.error ? <Notice ref={ref} tone="bad" role="alert">{state.errorMsg ? msg(state.errorMsg) : state.error}</Notice> : null;
 }

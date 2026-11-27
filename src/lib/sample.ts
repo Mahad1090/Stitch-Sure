@@ -1,3 +1,4 @@
+import { t, term, type Lang } from '@/lib/i18n';
 import type { Outcome, Part, Role } from '@/lib/workflow';
 
 /** All people, contact details and measurements below are invented sample data. */
@@ -18,14 +19,15 @@ export const ORDER = {
 };
 
 /** Simulated in-app notice shown to the tailor before sending. Nothing is really sent. */
-export function noticeText(o: { part: Part; style: string; outcome: Outcome; reason: string; alternative: string; cost: string; date: string }): string {
-  const part = o.part === 'Sleeve' ? 'sleeve' : 'neckline';
-  const lc = (s: string) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : '…');
-  const bare = (s: string) => s.trim().replace(/[.!?]+$/, '');
-  const cost = lc(o.cost); const date = lc(o.date);
-  if (o.outcome === 'Needs clarification') return `Assalam o Alaikum Areeba, Master Mahad has a question about your ${part} change: ${o.reason || '…'} Please reply in StitchSure.`;
-  if (o.outcome === 'Possible') return `Assalam o Alaikum Areeba, good news: ${o.style} can be made. ${cost}, ${date}. Please open StitchSure to approve.`;
-  return `Assalam o Alaikum Areeba, Master Mahad reviewed your ${part} change. ${o.style} can’t be made${o.reason ? `: ${bare(lc(o.reason))}` : ''}. He suggests ${o.alternative || '…'} (${cost}, ${date}). Please open StitchSure to approve it or keep your original.`;
+export function noticeText(o: { part: Part; style: string; outcome: Outcome; reason: string; alternative: string; cost: string; date: string }, lang: Lang = 'en'): string {
+  // Mid-sentence English reads in lower case; Urdu has no letter case.
+  const lc = (v: string) => (v ? (lang === 'en' ? v.charAt(0).toLowerCase() + v.slice(1) : v) : '…');
+  const part = lc(term(o.part, lang));
+  if (o.outcome === 'Needs clarification') return t('notice.question', { part, reason: o.reason || '…' }, lang);
+  const shared = { part, style: { term: o.style }, cost: lc(o.cost), date: lc(o.date) };
+  if (o.outcome === 'Possible') return t('notice.possible', shared, lang);
+  const reason = o.reason.trim().replace(/[.!?۔]+$/, '');
+  return t('notice.impossible', { ...shared, why: reason ? { msg: { key: 'notice.why', vars: { reason: lc(reason) } } } : '', alternative: o.alternative ? { term: o.alternative } : '…' }, lang);
 }
 
 /** Everything Areeba has placed. Only SS-014 is live in this prototype; the rest are sample history. */

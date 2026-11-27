@@ -1,3 +1,4 @@
+import { t, type Key, type Lang, type Var } from '@/lib/i18n';
 import type { Role, Workflow } from '@/lib/workflow';
 
 export type StepKey = 'request' | 'review' | 'approval' | 'stitching';
@@ -30,37 +31,39 @@ export function turn(s: Workflow, role: Role = 'customer'): '' | 'Waiting for yo
 export type Headline = { title: string; next: string };
 
 /** One headline per role: the same state, described from that person's point of view. */
-export function describe(s: Workflow, role: Role, sending: boolean): Headline {
+export function describe(s: Workflow, role: Role, sending: boolean, lang: Lang = 'en'): Headline {
   const r = s.request;
-  const v = s.version;
-  if (sending) return { title: 'Sending your request', next: 'Please wait. Your note and reference are kept.' };
+  const version = s.version;
+  const say = (key: Extract<Key, `head.${string}`>, next: Key, vars: Record<string, Var> = { version }): Headline => ({ title: t(key, vars, lang), next: t(next, vars, lang) });
+  if (sending) return say('head.sending', 'head.sending.next');
 
   if (role === 'tailor') {
-    if (s.paused) return { title: 'The worker reported a problem', next: 'Work on SS-014 is on hold until you reply.' };
-    if (!r) return { title: 'No open requests', next: 'Nothing needs your review right now.' };
-    if (r.status === 'Approved') return { title: `Areeba approved Version ${v}`, next: 'Shayan now sees only this version.' };
-    if (r.status === 'Rejected') return { title: 'Areeba kept her original design', next: `Version ${v} stays current. Nothing changes for Shayan.` };
-    if (!r.outcome) return { title: r.answer ? 'Areeba replied to your question' : 'New change request: needs your review', next: 'Read who is asking and what they want, then send your review.' };
-    if (r.outcome === 'Needs clarification') return { title: 'Question sent: waiting for Areeba', next: 'Production stays on the approved version until she answers.' };
-    return { title: 'Review sent: waiting for Areeba', next: 'The request stays open until she approves or keeps her original.' };
+    if (s.paused) return say('head.t.paused', 'head.t.paused.next');
+    if (!r) return say('head.t.none', 'head.t.none.next');
+    if (r.status === 'Approved') return say('head.t.approved', 'head.t.approved.next');
+    if (r.status === 'Rejected') return say('head.t.rejected', 'head.t.rejected.next');
+    if (!r.outcome) return say(r.answer ? 'head.t.replied' : 'head.t.new', 'head.t.new.next');
+    if (r.outcome === 'Needs clarification') return say('head.t.asked', 'head.t.asked.next');
+    return say('head.t.reviewed', 'head.t.reviewed.next');
   }
 
   if (role === 'worker') {
-    if (s.finished) return { title: 'Finished', next: `Version ${v} is done. Master Mahad has been told.` };
-    if (s.paused) return { title: 'On hold: problem reported', next: 'Do not stitch the affected part. Wait for Master Mahad to reply.' };
-    if (s.stitching) return { title: 'Stitching in progress', next: `Work from Version ${v} only.` };
-    if (r?.status === 'Pending') return { title: 'A change is waiting: hold stitching', next: 'Wait for the customer’s decision. The approved version has not changed.' };
-    return { title: `Version ${v} is current`, next: 'Read the final instructions, confirm, then start stitching.' };
+    if (s.finished) return say('head.w.finished', 'head.w.finished.next');
+    if (s.paused) return say('head.w.paused', 'head.w.paused.next');
+    if (s.stitching) return say('head.w.stitching', 'head.w.stitching.next');
+    if (r?.status === 'Pending') return say('head.w.pending', 'head.w.pending.next');
+    return say('head.w.current', 'head.w.current.next');
   }
 
   // Plain words first; the version number stays as a reference everyone (tailor, worker) can quote.
-  const design = `${s.sleeve} · ${s.neckline}`;
-  if (s.stitching && r?.status !== 'Pending') return { title: 'Your agreed design is being stitched', next: `${design} (Version ${v}).` };
-  if (!r) return { title: 'Your agreed design', next: `${design} (Version ${v}). Your tailor must agree before anything changes.` };
-  if (r.status === 'Approved') return { title: 'Your agreed design is updated', next: `${design}. This is Version ${v}; Version ${v - 1} was replaced.` };
-  if (r.status === 'Rejected') return { title: 'Your agreed design is unchanged', next: `${design} (Version ${v}). Tailor notified: original design kept.` };
-  if (!r.outcome) return { title: 'Waiting for Master Mahad', next: `Your agreed design (Version ${v}) stays the same. Nothing is stitched from your request until you both agree.` };
-  if (r.outcome === 'Needs clarification') return { title: 'Master Mahad has a question', next: 'Answer it so he can finish the review.' };
-  if (r.outcome === 'Impossible') return { title: 'Master Mahad can’t make that. Choose an option', next: 'He suggests another design that works on your cut fabric.' };
-  return { title: 'Master Mahad can make it. Choose an option', next: 'Approve it, or keep your original design.' };
+  const design: Var = { msg: { key: 'event.pair', vars: { first: { term: s.sleeve }, second: { term: s.neckline } } } };
+  const vars = { design, version, old: version - 1 };
+  if (s.stitching && r?.status !== 'Pending') return say('head.c.stitching', 'head.c.stitching.next', vars);
+  if (!r) return say('head.c.agreed', 'head.c.agreed.next', vars);
+  if (r.status === 'Approved') return say('head.c.updated', 'head.c.updated.next', vars);
+  if (r.status === 'Rejected') return say('head.c.unchanged', 'head.c.unchanged.next', vars);
+  if (!r.outcome) return say('head.c.waiting', 'head.c.waiting.next', vars);
+  if (r.outcome === 'Needs clarification') return say('head.c.question', 'head.c.question.next', vars);
+  if (r.outcome === 'Impossible') return say('head.c.impossible', 'head.c.impossible.next', vars);
+  return say('head.c.possible', 'head.c.possible.next', vars);
 }

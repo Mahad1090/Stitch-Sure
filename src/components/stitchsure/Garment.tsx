@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { t, term } from '@/lib/i18n';
+import { useLang } from '@/lib/i18n';
 import { ORDER } from '@/lib/sample';
 import type { Part } from '@/lib/workflow';
 
@@ -26,6 +26,7 @@ type Props = {
 };
 
 export function Garment({ sleeve, neckline, part = '', select, small }: Props) {
+  const { t, term } = useLang();
   const neck = NECK[neckline] ?? NECK['Round neckline']!;
   const sl = SLEEVE[sleeve] ?? SLEEVE['Straight sleeve']!;
   const vars = { garment: term(ORDER.garment), sleeve: term(sleeve), neckline: term(neckline) };

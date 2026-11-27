@@ -389,3 +389,24 @@
 }
 html[data-large="true"] { zoom: 1.15; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+/* ───────────── Language switch ───────────── */
+.ss-lang { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ss-lang-label { font-size: 13px; color: var(--muted-foreground); }
+.ss-lang-options { display: inline-flex; gap: 2px; padding: 2px; border-radius: 12px; border: 1px solid var(--input); }
+.ss-lang button { min-width: 64px; min-height: 44px; padding-inline: 12px; border-radius: 9px; font-weight: 600; }
+.ss-lang button[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); }
+.ss-lang button[lang="en"] { font-family: var(--font-sans); }
+
+/* ───────────── Urdu: Nastaliq needs room above and below ───────────── */
+.ss-lang button[lang="ur"] { font-family: "Noto Nastaliq Urdu", var(--font-sans); line-height: 2; }
+:root[lang="ur"] body { font-family: "Noto Nastaliq Urdu", var(--font-sans); line-height: 2.1; }
+:root[lang="ur"] :is(h1, h2, h3, p, span, strong, small, label, legend, dt, dd, li, a, button, input, textarea, figcaption, blockquote, time, em) { line-height: 2.1; }
+:root[lang="ur"] .ss-card.ss-current h2 { line-height: 2; }
+:root[lang="ur"] :is([lang="en"], [lang="en"] *) { font-family: var(--font-sans); line-height: 1.5; }
+[dir="rtl"] .ss-compare .ss-compare-arrow { transform: scaleX(-1); }
+@media (max-width: 700px) { [dir="rtl"] .ss-compare .ss-compare-arrow { transform: rotate(90deg); } }
+@media (max-width: 700px) {
+  /* The two buttons already name each language in its own script. */
+  .ss-lang-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}
