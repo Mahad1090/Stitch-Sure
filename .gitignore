@@ -142,14 +142,14 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
+# Local build and deploy output
+.wrangler/
+
 # Astro generated types
 .astro/
 
 # Turbo Repo
 .turbo
-
-# Local build and deploy output
-.wrangler/
 
 # Local-only files, not to be pushed
 /D5_PartA_findings.txt
