@@ -12,4 +12,9 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    // A CommonJS package used by @tanstack/react-store. Without this the dev server serves it
+    // unbundled after a restart and the page stops responding to clicks.
+    optimizeDeps: { include: ["use-sync-external-store/shim/with-selector"] },
+  },
 });

@@ -56,7 +56,7 @@ function RequestCard({ m }: { m: StitchSureModel }) {
   const pending = r.status === 'Pending';
   const wanted = requestedLabel(r);
   return (
-    <Card title={t('tailor.request.title')} aside={<Chip status={pending ? (r.outcome ? 'Waiting for the customer' : 'Waiting for you') : r.status} />}>
+    <Card title={t('tailor.request.title')} aside={<Chip status={pending ? (r.outcome ? 'Waiting for the customer' : 'Waiting for you') : r.status === 'Approved' && r.outcome === 'Impossible' ? 'Cannot be made' : r.status} />}>
       <p className="ss-ask"><span>{t(`part.${r.part}`)}:</span> <strong>{term(wanted)}</strong></p>
       {sentAt && <p className="ss-meta">{t('tailor.sentAt', { at: sentAt })}</p>}
       {/* An "Other" request changes nothing the drawing can show. */}

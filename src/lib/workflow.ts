@@ -33,6 +33,8 @@ export type Request = { part: Part; style: string; note: string; reference: bool
 export function requestedLabel(request: Pick<Request, 'style' | 'note'>): string {
   return request.style === DESCRIBED ? request.note.trim() : request.style;
 }
+/** The request whose note and photo describe the agreed design. A refused design's must never reach production. */
+export const agreedRequest = (r?: Request) => (r?.status === 'Approved' && r.outcome !== 'Impossible' ? r : undefined);
 /** `title` and `text` are the English record; `msg` is the same entry as translatable data. */
 export type Event = { title: string; text: string; status: 'Pending' | 'Approved' | 'Rejected' | 'Superseded' | 'Cancelled'; at: string; msg?: { title: Msg; text: Msg } | undefined };
 /** What approval replaced, kept so the customer can undo until the worker starts. */
@@ -75,6 +77,7 @@ export type Action =
   | { type: 'finish'; at: string }
   | { type: 'conflict'; kind: string; reason: string; at: string }
   | { type: 'resolve'; at: string; reply?: string }
+  | { type: 'dismiss' }
   | { type: 'reset' };
 
 const dateOnly = (at: string) => at.split(',').slice(0, 2).join(',');
@@ -84,6 +87,8 @@ export function workflowReducer(state: Workflow, action: Action): Workflow {
   const base = { ...state, error: '', errorMsg: undefined, message: '', messageMsg: undefined };
   switch (action.type) {
     case 'reset': return createInitialWorkflow();
+    /** Clears the last message and error, nothing else. */
+    case 'dismiss': return base;
     case 'request': {
       if (!action.part) return fail('error.noPart');
       if (!action.style) return fail('error.noStyle');

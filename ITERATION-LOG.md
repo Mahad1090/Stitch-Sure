@@ -69,6 +69,18 @@
 
 | Back button on every screen | Team request | Only some screens had a way back | One round back arrow wherever there is somewhere to go, including a waiting request (which stays unchanged) and the tailor and worker views (returns to the previous view) | `useStitchSure.ts`, `index.tsx` | `calm-ui`: "Back button" |
 
+## Found in our own D6 testing (not D5 findings)
+
+Found by automated browser testing and screenshot review run with Claude Code. These are **not** user evidence.
+
+| Change | What was wrong | What changed | File(s) | Test |
+|---|---|---|---|---|
+| Refused design's note withheld | After a "Cannot be made" review and approval of the offer, the worker and the order screen still showed the note and photo for the refused design | Note and photo are shown only when the requested design itself was approved | `workflow.ts`, `WorkerView.tsx`, `CustomerView.tsx` | `d6-fixes` |
+| Stale errors cleared | An error stayed visible after switching view, and in the report form | Switching view and opening or closing the report form clear messages | `useStitchSure.ts`, `workflow.ts` | `d6-fixes` |
+| Refused request label | The tailor's card showed the refused design as "Approved" | It shows "Cannot be made" | `TailorView.tsx` | `d6-fixes` |
+| Hold shown to the customer | The approval card did not say work was on hold | It shows the hold message | `CustomerView.tsx` | `d6-fixes` |
+| Dev server restart | After a restart the page loaded but did not respond to clicks | The affected package is pre-bundled | `vite.config.ts` | Cold start and three restarts in a browser |
+
 ## Still open
 - The Urdu text needs a native speaker's review.
 - No user testing or screen-reader session was run on this revision.

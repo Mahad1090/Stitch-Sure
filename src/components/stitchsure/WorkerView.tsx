@@ -4,7 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { CUSTOMER, ORDER, PROBLEM_KINDS, RELEVANT_MEASUREMENT } from '@/lib/sample';
 import { useLang } from '@/lib/i18n';
-import { EXTRA_PARTS } from '@/lib/workflow';
+import { EXTRA_PARTS, agreedRequest } from '@/lib/workflow';
 import { Card, Chip, Disclosure, ErrorSlot, Facts, Field, Notice, OptionList, focusProps } from './ui';
 import { Garment } from './Garment';
 import type { StitchSureModel } from './useStitchSure';
@@ -15,6 +15,7 @@ export function WorkerView({ m }: { m: StitchSureModel }) {
   const { state, dispatch, worker, busy } = m;
   const r = state.request;
   const pending = r?.status === 'Pending';
+  const agreed = agreedRequest(r);
   const replaced = state.events.filter(e => e.status === 'Superseded');
   const relevant = RELEVANT_MEASUREMENT[r?.status === 'Approved' ? r.part : 'Sleeve'];
   const updated = state.version > 1 && !state.acknowledged && !state.stitching && !state.finished;
@@ -39,7 +40,7 @@ export function WorkerView({ m }: { m: StitchSureModel }) {
             { label: t('fact.fabric'), value: term(ORDER.fabric) },
             { label: t('fact.due'), value: <bdi dir="ltr">{ORDER.delivery}</bdi> },
             // The worker's instructions are never shortened. A described design already is the note.
-            ...(r?.status === 'Approved' && r.note && ![state.sleeve, state.neckline, ...Object.values(state.extras)].includes(r.note.trim()) ? [{ label: t('worker.notes'), value: <bdi>“{r.note}”</bdi> }] : []),
+            ...(agreed?.note && ![state.sleeve, state.neckline, ...Object.values(state.extras)].includes(agreed.note.trim()) ? [{ label: t('worker.notes'), value: <bdi>“{agreed.note}”</bdi> }] : []),
           ]} />
         </div>
         {pending && <Notice tone="info">{t('worker.pending')}</Notice>}

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { CUSTOMER, ORDER, PARTS, STYLE_OPTIONS } from '@/lib/sample';
 import { useLang } from '@/lib/i18n';
-import { DESCRIBED, EXTRA_PARTS, designOf, requestedLabel, withDesign, type Part } from '@/lib/workflow';
+import { DESCRIBED, EXTRA_PARTS, agreedRequest, designOf, requestedLabel, withDesign, type Part } from '@/lib/workflow';
 import { Card, Chip, Disclosure, ErrorSlot, Facts, Field, LongText, Notice, OptionList, StepRail, UndoNotice, focusProps } from './ui';
 import { Timeline } from './Activity';
 import { activeStep } from '@/lib/status';
@@ -79,7 +79,7 @@ function OrderScreen({ m }: { m: StitchSureModel }) {
   const { t, term, msg } = useLang();
   const { state, customer } = m;
   const r = state.request;
-  const approved = r?.status === 'Approved';
+  const agreed = agreedRequest(r);
   const earlier = state.events.filter(e => e.status === 'Superseded');
   return (
     <Card title={t('orderScreen.title')} focusTarget className="ss-narrow" aside={<Chip status="Agreed" version={state.version} />}>
@@ -98,8 +98,8 @@ function OrderScreen({ m }: { m: StitchSureModel }) {
           <Facts label={t('order.more')} rows={[
             { label: t('tile.stage'), value: term(state.stage) },
             { label: t('fact.neededFor'), value: <>{term(ORDER.event)}, <bdi dir="ltr">{ORDER.eventDate}</bdi></> },
-            { label: t('fact.reference'), value: r?.reference && approved ? t('fact.referenceFile') : t('fact.none') },
-            { label: t('fact.note'), value: approved && r.note ? <LongText text={`“${r.note}”`} /> : t('fact.none') },
+            { label: t('fact.reference'), value: agreed?.reference ? t('fact.referenceFile') : t('fact.none') },
+            { label: t('fact.note'), value: agreed?.note ? <LongText text={`“${agreed.note}”`} /> : t('fact.none') },
           ]} />
         </Disclosure>
         <Disclosure label={t('measurements.title')}>
@@ -334,6 +334,7 @@ function ApprovedCard({ m }: { m: StitchSureModel }) {
       <Notice tone="ok">{t('approved.notice', { version: state.version, old: state.version - 1 })}</Notice>
       <p className="ss-gap"><strong>{t('approved.design')}</strong> {[state.sleeve, state.neckline, ...Object.values(state.extras)].map(term).join(' · ')} · {t('order.due', { date: ORDER.delivery })}</p>
       <p className="ss-meta">{t(state.stitching ? 'approved.started' : 'approved.notStarted')}</p>
+      {state.paused && <Notice tone="info">{t('worker.paused')}</Notice>}
       <ErrorSlot state={state} />
       <div className="ss-actions">
         <Button onClick={() => { customer.setShowApproved(false); customer.go('home'); }}>{t('back.choices')}</Button>

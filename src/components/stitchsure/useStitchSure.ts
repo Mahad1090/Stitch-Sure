@@ -43,7 +43,7 @@ export function useStitchSure() {
   useEffect(() => { setDraft(BLANK_REVIEW); }, [requestKey]);
 
   // Worker
-  const [reportOpen, setReportOpen] = useState(false);
+  const [reportOpen, setReport] = useState(false);
   const [problemKind, setProblemKind] = useState('');
   const [problem, setProblem] = useState('');
   const [reply, setReply] = useState('');
@@ -52,20 +52,15 @@ export function useStitchSure() {
   const unseen = role === 'tailor' && state.request?.status === 'Pending' && !state.request.seen;
   useEffect(() => { if (unseen) dispatch({ type: 'seen' }); }, [unseen]);
 
-  // A confirmation message belongs to the person who acted, so hide it once the view switches role.
-  const [hiddenNote, setHiddenNote] = useState('');
-  const noteText = state.error ? '' : state.message;
-  const noteRef = useRef('');
-  noteRef.current = noteText;
-  const banner = noteText && noteText !== hiddenNote ? noteText : '';
+  // A message or error belongs to the person who caused it, so switching view clears it.
+  const clearNotes = () => dispatch({ type: 'dismiss' });
+  const banner = state.error ? '' : state.message;
   const lastRole = useRef<Role>('customer');
   const switchRole = useCallback((r: Role) => {
-    setHiddenNote(noteRef.current); setRole(previous => { if (previous !== r) lastRole.current = previous; return r; }); setNavOpen(false);
+    dispatch({ type: 'dismiss' }); setRole(previous => { if (previous !== r) lastRole.current = previous; return r; }); setNavOpen(false);
     setScreen(s => (s === 'form' ? s : 'home'));
   }, []);
 
-  /** Clears the last message and error without changing the workflow. */
-  const clearNotes = () => dispatch({ type: 'acknowledge', value: state.acknowledged });
   const go = (to: CustomerScreen) => { clearNotes(); setScreen(to); };
   // A new request always opens empty (critique row 22).
   const openForm = () => { setPart(''); setStyle(''); setNote(''); setReference(false); setStep(1); go('form'); };
@@ -101,8 +96,9 @@ export function useStitchSure() {
     const action: Action = { type: 'conflict', kind: problemKind, reason: problem, at: stamp() };
     const next = workflowReducer(state, action);
     dispatch(action);
-    if (!state.paused && next.paused) { setReportOpen(false); setProblem(''); setProblemKind(''); }
+    if (!state.paused && next.paused) { setReport(false); setProblem(''); setProblemKind(''); }
   };
+  const setReportOpen = (open: boolean) => { clearNotes(); setReport(open); };
   const finish = () => dispatch({ type: 'finish', at: stamp() });
   const resolveProblem = () => { dispatch({ type: 'resolve', reply, at: stamp() }); setReply(''); };
 
@@ -110,7 +106,7 @@ export function useStitchSure() {
     dispatch({ type: 'reset' });
     setRole('customer'); setScreen('home'); setStep(1); setShowApproved(false); setConfirmCancel(false); setAnswer('');
     setPart(''); setStyle(''); setNote(''); setReference(false);
-    setReportOpen(false); setProblem(''); setProblemKind(''); setReply('');
+    setReport(false); setProblem(''); setProblemKind(''); setReply('');
     setDraft(BLANK_REVIEW);
   };
 
