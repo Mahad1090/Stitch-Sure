@@ -104,8 +104,12 @@
   h4,
   small,
   li,
-  blockquote {
-    overflow-wrap: anywhere;
+  blockquote,
+  figcaption,
+  span,
+  button {
+    /* Not overflow-wrap: WebKit ignores it when sizing flex rows, so long words still overflow. */
+    word-break: break-word;
   }
   h1,
   h2,

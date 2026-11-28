@@ -109,17 +109,20 @@ export function workflowReducer(state: Workflow, action: Action): Workflow {
     case 'stage': return { ...base, stage: action.stage, ...note({ key: 'msg.stage', vars: { stage: { term: action.stage } } }) };
     case 'review': {
       if (!state.request || state.request.status !== 'Pending') return fail('error.noRequestToReview');
-      if (action.outcome === 'Impossible' && (!action.reason.trim() || !action.alternative.trim())) return fail('error.needReason');
+      if (action.outcome === 'Impossible' && !action.reason.trim()) return fail('error.needReason');
       if (action.outcome === 'Needs clarification' && !action.reason.trim()) return fail('error.needQuestion');
       if (state.stage !== 'Not cut' && state.request.style === 'Bell sleeves' && action.outcome === 'Possible') return fail('error.fabricCut');
-      if (action.outcome !== 'Needs clarification' && (!action.cost.trim() || !action.date.trim())) return fail('error.needCost');
+      const alternative = action.alternative.trim();
+      // A refusal with nothing offered has no cost or delivery effect to state.
+      const priced = action.outcome === 'Possible' || (action.outcome === 'Impossible' && Boolean(alternative));
+      if (priced && (!action.cost.trim() || !action.date.trim())) return fail('error.needCost');
       const question = action.outcome === 'Needs clarification';
       const review: Msg = { key: 'event.review.text', vars: {
         verdict: { msg: { key: action.outcome === 'Impossible' ? 'outcome.Impossible' : 'outcome.Possible' } },
         reason: action.reason || { msg: { key: 'event.review.possible' } },
-        offer: action.alternative ? { msg: { key: 'event.review.offer', vars: { alternative: { term: action.alternative } } } } : '',
+        offer: alternative ? { msg: { key: 'event.review.offer', vars: { alternative: { term: alternative } } } } : '',
       } };
-      return { ...base, request: { ...state.request, seen: true, outcome: action.outcome, reason: action.reason, alternative: action.alternative, cost: action.cost, date: action.date }, ...note({ key: question ? 'msg.questionSent' : 'msg.reviewSent' }), events: [...state.events, entry('Pending', { key: question ? 'event.asked.title' : 'event.review.title' }, question ? quote(action.reason) : review, action.at)] };
+      return { ...base, request: { ...state.request, seen: true, outcome: action.outcome, reason: action.reason, alternative, cost: action.cost, date: action.date }, ...note({ key: question ? 'msg.questionSent' : 'msg.reviewSent' }), events: [...state.events, entry('Pending', { key: question ? 'event.asked.title' : 'event.review.title' }, question ? quote(action.reason) : review, action.at)] };
     }
     case 'answer': {
       const r = state.request;
@@ -146,9 +149,11 @@ export function workflowReducer(state: Workflow, action: Action): Workflow {
     case 'reject': {
       const r = state.request;
       if (r?.status !== 'Pending') return fail('error.nothingToDecline');
-      const declined = r.outcome === 'Impossible' ? r.alternative ?? requestedLabel(r) : requestedLabel(r);
-      const refused: Msg = { key: 'declined.declined', vars: { design: { term: declined }, date: dateOnly(action.at) } };
-      return { ...base, request: { ...r, status: 'Rejected' }, declined: [...state.declined, render(refused)], declinedMsgs: [...state.declinedMsgs, refused], ...note({ key: 'msg.keptOriginal' }), events: [...state.events, entry('Rejected', { key: 'event.rejected.title' }, { key: 'event.rejected.text', vars: { design: { term: declined }, version: state.version } }, action.at)] };
+      const declined = (r.outcome === 'Impossible' && r.alternative) || requestedLabel(r);
+      // With nothing offered, the customer declined nothing: the record says it cannot be made.
+      const noOffer = r.outcome === 'Impossible' && !r.alternative;
+      const refused: Msg = { key: noOffer ? 'declined.impossible' : 'declined.declined', vars: { design: { term: declined }, date: dateOnly(action.at) } };
+      return { ...base, request: { ...r, status: 'Rejected' }, declined: [...state.declined, render(refused)], declinedMsgs: [...state.declinedMsgs, refused], ...note({ key: 'msg.keptOriginal' }), events: [...state.events, entry('Rejected', { key: 'event.rejected.title' }, noOffer ? refused : { key: 'event.rejected.text', vars: { design: { term: declined }, version: state.version } }, action.at)] };
     }
     case 'acknowledge': return { ...base, acknowledged: action.value };
     case 'start': {

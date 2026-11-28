@@ -79,6 +79,9 @@ Found by automated browser testing and screenshot review run with Claude Code. T
 | Stale errors cleared | An error stayed visible after switching view, and in the report form | Switching view and opening or closing the report form clear messages | `useStitchSure.ts`, `workflow.ts` | `d6-fixes` |
 | Refused request label | The tailor's card showed the refused design as "Approved" | It shows "Cannot be made" | `TailorView.tsx` | `d6-fixes` |
 | Hold shown to the customer | The approval card did not say work was on hold | It shows the hold message | `CustomerView.tsx` | `d6-fixes` |
+| Long words wrap | A very long word with no spaces overflowed the decision and later screens | Text wraps inside its box, including in WebKit flex rows | `styles.css` | Browser check in Chromium, Firefox and WebKit |
+| Offer made optional (team request) | "Cannot be made" forced the tailor to offer another design | The offer is optional; cost and delivery are asked only with an offer; without one the customer can only keep the original | `workflow.ts`, views, `status.ts`, `i18n.ts` | `workflow`, `d6-fixes` |
+| Tab icon (team request) | The browser tab showed the template icon | It shows the StitchSure round mark | `public/favicon.svg`, `__root.tsx` | Browser check |
 | Dev server restart | After a restart the page loaded but did not respond to clicks | The affected package is pre-bundled | `vite.config.ts` | Cold start and three restarts in a browser |
 
 ## Still open

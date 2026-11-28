@@ -44,7 +44,7 @@ export function describe(s: Workflow, role: Role, sending: boolean, lang: Lang =
     if (r.status === 'Rejected') return say('head.t.rejected', 'head.t.rejected.next');
     if (!r.outcome) return say(r.answer ? 'head.t.replied' : 'head.t.new', 'head.t.new.next');
     if (r.outcome === 'Needs clarification') return say('head.t.asked', 'head.t.asked.next');
-    return say('head.t.reviewed', 'head.t.reviewed.next');
+    return say('head.t.reviewed', r.outcome === 'Impossible' && !r.alternative ? 'head.t.refused.next' : 'head.t.reviewed.next');
   }
 
   if (role === 'worker') {
@@ -64,6 +64,7 @@ export function describe(s: Workflow, role: Role, sending: boolean, lang: Lang =
   if (r.status === 'Rejected') return say('head.c.unchanged', 'head.c.unchanged.next', vars);
   if (!r.outcome) return say('head.c.waiting', 'head.c.waiting.next', vars);
   if (r.outcome === 'Needs clarification') return say('head.c.question', 'head.c.question.next', vars);
+  if (r.outcome === 'Impossible' && !r.alternative) return say('head.c.refused', 'head.c.refused.next', vars);
   if (r.outcome === 'Impossible') return say('head.c.impossible', 'head.c.impossible.next', vars);
   return say('head.c.possible', 'head.c.possible.next', vars);
 }

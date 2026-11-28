@@ -19,7 +19,7 @@ If `npm install` shows the error "Cannot read properties of null (reading 'edges
 ## Checks
 | Command | What it does |
 |---|---|
-| `bun run test` | 105 Vitest tests (rules, screens, D5 and D6 fixes, Urdu, theme) |
+| `bun run test` | 107 Vitest tests (rules, screens, D5 and D6 fixes, Urdu, theme) |
 | `npx tsc --noEmit` | Type check |
 | `bun run build` | Production build |
 | `node scripts/contrast.mjs` | Colour contrast of the theme |

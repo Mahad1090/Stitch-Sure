@@ -1,4 +1,4 @@
-import { t, term, type Lang } from '@/lib/i18n';
+import { t, term, type Lang, type Var } from '@/lib/i18n';
 import { formatDate, sampleDates } from '@/lib/dates';
 import type { Outcome, Part, Role } from '@/lib/workflow';
 
@@ -28,7 +28,9 @@ export function noticeText(o: { part: Part; style: string; outcome: Outcome; rea
   const shared = { part, style: { term: o.style }, cost: lc(o.cost), date: lc(o.date) };
   if (o.outcome === 'Possible') return t('notice.possible', shared, lang);
   const reason = o.reason.trim().replace(/[.!?۔]+$/, '');
-  return t('notice.impossible', { ...shared, why: reason ? { msg: { key: 'notice.why', vars: { reason: lc(reason) } } } : '', alternative: o.alternative ? { term: o.alternative } : '…' }, lang);
+  const why: Var = reason ? { msg: { key: 'notice.why', vars: { reason: lc(reason) } } } : '';
+  if (!o.alternative.trim()) return t('notice.refused', { ...shared, why }, lang);
+  return t('notice.impossible', { ...shared, why, alternative: { term: o.alternative } }, lang);
 }
 
 /** Everything Areeba has placed. Only SS-014 is live in this prototype; the rest are sample history. */

@@ -15,7 +15,7 @@ Do not present them as checked until a native speaker on the team has read them.
 - Rendering: in bold Nastaliq, سیدھی shows a visible gap before ھ. Check whether that reads acceptably.
 - `{curly}` words are filled in by the app and must stay as they are.
 
-## Strings (458)
+## Strings (462)
 
 | Key | English | Urdu | Reviewed |
 |---|---|---|---|
@@ -207,12 +207,12 @@ Do not present them as checked until a native speaker on the team has read them.
 | `outcome.Impossible` | Cannot be made | نہیں بن سکتا | no |
 | `outcome.Needs clarification` | Ask a question | سوال پوچھیں | no |
 | `outcome.help.Possible` | Areeba sees your cost and delivery effect, then decides. | Areeba کو قیمت اور تاریخ کا اثر دکھے گا، پھر فیصلہ ہوگا۔ | no |
-| `outcome.help.Impossible` | Say why, and offer one design you can make. The agreed design stays until Areeba decides. | وجہ لکھیں اور ایک ڈیزائن تجویز کریں جو بن سکے۔ فیصلے تک طے شدہ ڈیزائن ہی رہے گا۔ | no |
+| `outcome.help.Impossible` | Say why. You can also offer one design you can make. The agreed design stays until Areeba decides. | وجہ لکھیں۔ چاہیں تو ایک ڈیزائن بھی تجویز کریں جو بن سکے۔ فیصلے تک طے شدہ ڈیزائن ہی رہے گا۔ | no |
 | `outcome.help.Needs clarification` | Ask one clear question. Nothing changes in production until Areeba answers. | ایک صاف سوال پوچھیں۔ جواب آنے تک سلائی میں کچھ نہیں بدلے گا۔ | no |
 | `review.question` | Your question to the customer | گاہک سے آپ کا سوال | no |
 | `review.reason` | Reason it cannot be made (required) | کیوں نہیں بن سکتا (ضروری) | no |
 | `review.noteOptional` | Note for Areeba (optional) | Areeba کے لیے نوٹ (اختیاری) | no |
-| `review.alternative` | Offer this instead (required) | اس کی جگہ یہ تجویز کریں (ضروری) | no |
+| `review.alternative` | Offer this instead (optional) | اس کی جگہ یہ تجویز کریں (اختیاری) | no |
 | `review.cost` | Cost effect | قیمت پر اثر | no |
 | `review.date` | Delivery effect | حوالگی کی تاریخ پر اثر | no |
 | `review.preview` | Areeba will receive | Areeba کو یہ پیغام ملے گا | no |
@@ -302,7 +302,7 @@ Do not present them as checked until a native speaker on the team has read them.
 | `error.locked` | Stitching has started. Ask the tailor before requesting another change. | سلائی شروع ہو چکی ہے۔ نئی تبدیلی مانگنے سے پہلے درزی سے پوچھیں۔ | no |
 | `error.cannotCancel` | This request can no longer be cancelled here. Choose an option instead. | یہ درخواست اب یہاں منسوخ نہیں ہو سکتی۔ اس کی جگہ ایک انتخاب کریں۔ | no |
 | `error.noRequestToReview` | Open a waiting customer request first. | پہلے گاہک کی انتظار میں پڑی درخواست کھولیں۔ | no |
-| `error.needReason` | Add why it cannot be made and one design you can offer instead, then send again. Your entries are kept. | لکھیں کہ یہ کیوں نہیں بن سکتا اور ایک متبادل ڈیزائن تجویز کریں، پھر دوبارہ بھیجیں۔ آپ کا لکھا محفوظ ہے۔ | no |
+| `error.needReason` | Add why it cannot be made, then send again. Your entries are kept. | لکھیں کہ یہ کیوں نہیں بن سکتا، پھر دوبارہ بھیجیں۔ آپ کا لکھا محفوظ ہے۔ | no |
 | `error.needQuestion` | Type the question you need the customer to answer, then send again. | گاہک سے پوچھنے والا سوال لکھیں، پھر دوبارہ بھیجیں۔ | no |
 | `error.fabricCut` | Fabric is already cut. Bell sleeves can’t be made. Mark “Cannot be made” and offer Cuff Trim. Your entries are kept. | کپڑا کٹ چکا ہے۔ بیل آستین نہیں بن سکتی۔ “نہیں بن سکتا” چنیں اور کف ٹرم تجویز کریں۔ آپ کا لکھا محفوظ ہے۔ | no |
 | `error.needCost` | Enter the cost and delivery effect before sending. Your entries are kept. | بھیجنے سے پہلے قیمت اور تاریخ پر اثر لکھیں۔ آپ کا لکھا محفوظ ہے۔ | no |
@@ -375,6 +375,7 @@ Do not present them as checked until a native speaker on the team has read them.
 | `head.t.asked.next` | Production stays on the approved version until she answers. | جواب آنے تک سلائی منظور شدہ ورژن پر ہی رہے گی۔ | no |
 | `head.t.reviewed` | Review sent: waiting for Areeba | جواب بھیج دیا: Areeba کا انتظار ہے | no |
 | `head.t.reviewed.next` | The request stays open until she approves or keeps her original. | منظوری یا اصل ڈیزائن رکھنے کے فیصلے تک درخواست کھلی رہے گی۔ | no |
+| `head.t.refused.next` | The request stays open until she keeps her original. | ان کے اصل ڈیزائن رکھنے تک درخواست کھلی رہے گی۔ | no |
 | `head.w.finished` | Finished | مکمل | no |
 | `head.w.finished.next` | Version {version} is done. Master Mahad has been told. | ورژن {version} تیار ہے۔ ماسٹر مہاد کو بتا دیا گیا ہے۔ | no |
 | `head.w.paused` | On hold: problem reported | کام رکا ہوا: مسئلہ بتایا گیا ہے | no |
@@ -399,11 +400,14 @@ Do not present them as checked until a native speaker on the team has read them.
 | `head.c.question.next` | Answer it so he can finish the review. | جواب دیں تاکہ جانچ مکمل ہو سکے۔ | no |
 | `head.c.impossible` | Master Mahad can’t make that. Choose an option | ماسٹر مہاد یہ نہیں بنا سکتے۔ ایک انتخاب کریں | no |
 | `head.c.impossible.next` | He suggests another design that works on your cut fabric. | انہوں نے دوسرا ڈیزائن تجویز کیا ہے جو آپ کے کٹے کپڑے پر بن سکتا ہے۔ | no |
+| `head.c.refused` | Master Mahad can’t make that | ماسٹر مہاد یہ نہیں بنا سکتے | no |
+| `head.c.refused.next` | Keep your agreed design. You can ask for a different change after that. | اپنا طے شدہ ڈیزائن رکھیں۔ اس کے بعد آپ کوئی اور تبدیلی مانگ سکتے ہیں۔ | no |
 | `head.c.possible` | Master Mahad can make it. Choose an option | ماسٹر مہاد یہ بنا سکتے ہیں۔ ایک انتخاب کریں | no |
 | `head.c.possible.next` | Approve it, or keep your original design. | اسے منظور کریں، یا اپنا اصل ڈیزائن رکھیں۔ | no |
 | `notice.question` | Assalam o Alaikum Areeba, Master Mahad has a question about your {part} change: {reason} Please reply in StitchSure. | السلام علیکم Areeba، {part} کی تبدیلی کے بارے میں ماسٹر مہاد کا سوال ہے: {reason} براہِ کرم StitchSure میں جواب دیں۔ | no |
 | `notice.possible` | Assalam o Alaikum Areeba, good news: {style} can be made. {cost}, {date}. Please open StitchSure to approve. | السلام علیکم Areeba، خوشخبری: {style} بن سکتا ہے۔ {cost}، {date}۔ منظوری کے لیے StitchSure کھولیں۔ | no |
 | `notice.impossible` | Assalam o Alaikum Areeba, Master Mahad reviewed your {part} change. {style} can’t be made{why}. He suggests {alternative} ({cost}, {date}). Please open StitchSure to approve it or keep your original. | السلام علیکم Areeba، ماسٹر مہاد نے {part} کی تبدیلی دیکھ لی ہے۔ {style} نہیں بن سکتا{why}۔ ان کی تجویز: {alternative} ({cost}، {date})۔ منظور کرنے یا اصل ڈیزائن رکھنے کے لیے StitchSure کھولیں۔ | no |
+| `notice.refused` | Assalam o Alaikum Areeba, Master Mahad reviewed your {part} change. {style} can’t be made{why}. Please open StitchSure to keep your original design. | السلام علیکم Areeba، ماسٹر مہاد نے {part} کی تبدیلی دیکھ لی ہے۔ {style} نہیں بن سکتا{why}۔ اپنا اصل ڈیزائن رکھنے کے لیے StitchSure کھولیں۔ | no |
 | `notice.why` | : {reason} | : {reason} | no |
 | `skip` | Skip to main content | اصل مواد پر جائیں | no |
 | `text.more` | Show more | مزید دکھائیں | no |

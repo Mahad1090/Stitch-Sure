@@ -9,7 +9,13 @@ describe('StitchSure workflow rules', () => {
   it('sends as pending, not accepted', () => { expect(pending().request?.status).toBe('Pending'); expect(pending().sleeve).toBe('Straight sleeve'); });
   it('seeing does not approve', () => { const s = reduce(pending(), { type: 'seen' }); expect(s.request?.seen).toBe(true); expect(s.request?.status).toBe('Pending'); });
   it('impossible requires a reason', () => expect(reduce(pending(), { type: 'review', outcome: 'Impossible', reason: '', alternative: 'Cuff Trim', cost: 'No extra cost', date: 'Delivery unchanged', at }).request?.outcome).toBeUndefined());
-  it('impossible requires an alternative', () => expect(reduce(pending(), { type: 'review', outcome: 'Impossible', reason: 'Cut', alternative: '', cost: 'No extra cost', date: 'Delivery unchanged', at }).error).not.toBe(''));
+  it('impossible may offer nothing: no cost is needed, it cannot be approved, and keeping records why', () => {
+    const refused = reduce(pending(), { type: 'review', outcome: 'Impossible', reason: 'Cut', alternative: '  ', cost: '', date: '', at });
+    expect(refused.error).toBe(''); expect(refused.request?.alternative).toBe('');
+    expect(reduce(refused, { type: 'approve', at }).error).not.toBe('');
+    expect(reduce(refused, { type: 'reject', at }).declined[0]).toMatch(/Bell sleeves, cannot be made/);
+  });
+  it('an offered alternative still needs cost and delivery', () => expect(reduce(pending(), { type: 'review', outcome: 'Impossible', reason: 'Cut', alternative: 'Cuff Trim', cost: '', date: '', at }).error).not.toBe(''));
   it('bell sleeves cannot be possible when fabric is cut', () => expect(reduce(pending(), { type: 'review', outcome: 'Possible', reason: '', alternative: '', cost: 'No extra cost', date: 'Delivery unchanged', at }).request?.outcome).toBeUndefined());
   it('review leaves production unchanged until customer approval', () => { expect(reviewed().request?.status).toBe('Pending'); expect(reviewed().version).toBe(1); expect(reviewed().sleeve).toBe('Straight sleeve'); });
   it('approval produces Version 2 Cuff Trim and supersedes Version 1', () => { const s = reduce(reviewed(), { type: 'approve', at }); expect(s.version).toBe(2); expect(s.sleeve).toBe('Cuff Trim'); expect(s.request?.status).toBe('Approved'); expect(s.events[0]?.status).toBe('Superseded'); expect(s.request?.cost).toBe('No extra cost'); expect(s.request?.date).toBe('Delivery unchanged'); });

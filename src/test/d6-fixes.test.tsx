@@ -22,6 +22,20 @@ async function approveOffer() {
 }
 
 describe("D6 self-testing fixes", () => {
+  it("lets the tailor refuse without offering another design", async () => {
+    renderApp();
+    await sendRequest();
+    viewAs("Tailor");
+    pick("Cannot be made");
+    type(/^Reason/, "Fabric is cut");
+    expect(screen.queryByLabelText("Cost effect")).toBeNull();
+    click("Send review to customer");
+    viewAs("Customer");
+    expect(screen.queryByRole("button", { name: /^Approve/ })).toBeNull();
+    click("Keep my original design");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("never gives the worker or the order screen the refused design's note", async () => {
     await approveOffer();
     viewAs("Worker");

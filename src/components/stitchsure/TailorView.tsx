@@ -99,7 +99,7 @@ function ReviewCard({ m }: { m: StitchSureModel }) {
           { label: t('review.field.outcome'), value: t(`outcome.${r.outcome}`) },
           { label: t(ask ? 'review.field.question' : 'review.field.reason'), value: <bdi>{r.reason || t('fact.none')}</bdi> },
           ...(r.alternative ? [{ label: t('review.field.alternative'), value: term(r.alternative) }] : []),
-          ...(ask ? [] : [{ label: t('review.field.cost'), value: <bdi>{r.cost}</bdi> }, { label: t('review.field.delivery'), value: <bdi>{r.date}</bdi> }]),
+          ...(ask || !r.cost ? [] : [{ label: t('review.field.cost'), value: <bdi>{r.cost}</bdi> }, { label: t('review.field.delivery'), value: <bdi>{r.date}</bdi> }]),
         ]} />
       </Card>
     );
@@ -117,7 +117,7 @@ function ReviewCard({ m }: { m: StitchSureModel }) {
       {o && ask && <Field label={t('review.question')} htmlFor="review-question"><Textarea id="review-question" rows={3} value={review.question} onChange={e => review.setQuestion(e.target.value)} /></Field>}
       {o && !ask && <Field label={t(o === 'Impossible' ? 'review.reason' : 'review.noteOptional')} htmlFor="review-reason"><Textarea id="review-reason" rows={3} value={review.reason} onChange={e => review.setReason(e.target.value)} /></Field>}
       {o === 'Impossible' && <Field label={t('review.alternative')} htmlFor="review-alt"><Input id="review-alt" value={review.alternative} onChange={e => review.setAlternative(e.target.value)} /></Field>}
-      {o && !ask && (
+      {(o === 'Possible' || (o === 'Impossible' && review.alternative.trim())) && (
         <div className="ss-two">
           <Field label={t('review.cost')} htmlFor="review-cost"><Input id="review-cost" value={review.cost} onChange={e => review.setCost(e.target.value)} /></Field>
           <Field label={t('review.date')} htmlFor="review-date"><Input id="review-date" value={review.date} onChange={e => review.setDate(e.target.value)} /></Field>

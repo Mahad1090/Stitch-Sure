@@ -86,7 +86,7 @@ export function useStitchSure() {
     const { outcome, reason, question, alternative, cost, date } = draft;
     if (!outcome) return;
     const ask = outcome === 'Needs clarification';
-    dispatch({ type: 'review', outcome, reason: ask ? question : reason, alternative: outcome === 'Impossible' ? alternative : '', cost, date, at: stamp() });
+    dispatch({ type: 'review', outcome, reason: ask ? question : reason, alternative: outcome === 'Impossible' ? alternative : '', ...(outcome === 'Impossible' && !alternative.trim() ? { cost: '', date: '' } : { cost, date }), at: stamp() });
   };
   const sendAnswer = () => { dispatch({ type: 'answer', text: answer, at: stamp() }); setAnswer(''); };
   const approve = () => { dispatch({ type: 'approve', at: stamp() }); setShowApproved(true); };

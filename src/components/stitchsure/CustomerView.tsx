@@ -292,8 +292,10 @@ function DecisionCard({ m }: { m: StitchSureModel }) {
   const impossible = r.outcome === 'Impossible';
   const offer = impossible ? r.alternative ?? '' : requestedLabel(r);
   const unchanged = /unchanged/i.test(r.date ?? '');
+  // The tailor may refuse without offering anything else: then the only step is to keep the original.
+  const refusedOnly = impossible && !offer;
   return (
-    <Card title={t('decision.title')} focusTarget className="ss-narrow" aside={<Chip status="Waiting for you" />}>
+    <Card title={t(refusedOnly ? 'status.Cannot be made' : 'decision.title')} focusTarget className="ss-narrow" aside={<Chip status="Waiting for you" />}>
       {impossible && (
         <div className="ss-offer ss-offer-no">
           <span className="ss-eyebrow">{t('decision.asked')}</span>
@@ -302,22 +304,24 @@ function DecisionCard({ m }: { m: StitchSureModel }) {
           {r.reason && <p><bdi>{r.reason}</bdi></p>}
         </div>
       )}
-      <div className="ss-offer ss-offer-yes">
-        <span className="ss-eyebrow">{t(impossible ? 'decision.other' : 'decision.confirms')}</span>
-        <h3>{term(offer)}</h3>
-        <Chip status="Can be made" />
-        {!impossible && r.reason && <p><bdi>{r.reason}</bdi></p>}
-        <figure className="ss-offer-preview"><Garment small {...withDesign(state, r.part, offer)} part={r.part} /><figcaption>{t('decision.preview', { style: term(offer) })}</figcaption></figure>
-        <dl className="ss-effects">
-          <div><dt>{t('decision.cost')}</dt><dd><bdi>{r.cost}</bdi></dd></div>
-          <div><dt>{t('decision.dateChange')}</dt><dd><bdi>{unchanged ? t('fact.none') : r.date}</bdi></dd></div>
-        </dl>
-        {unchanged && <p className="ss-hint">{t('decision.stillReady', { event: term(ORDER.event), date: ORDER.eventDate })}</p>}
-      </div>
+      {!refusedOnly && (
+        <div className="ss-offer ss-offer-yes">
+          <span className="ss-eyebrow">{t(impossible ? 'decision.other' : 'decision.confirms')}</span>
+          <h3>{term(offer)}</h3>
+          <Chip status="Can be made" />
+          {!impossible && r.reason && <p><bdi>{r.reason}</bdi></p>}
+          <figure className="ss-offer-preview"><Garment small {...withDesign(state, r.part, offer)} part={r.part} /><figcaption>{t('decision.preview', { style: term(offer) })}</figcaption></figure>
+          <dl className="ss-effects">
+            <div><dt>{t('decision.cost')}</dt><dd><bdi>{r.cost}</bdi></dd></div>
+            <div><dt>{t('decision.dateChange')}</dt><dd><bdi>{unchanged ? t('fact.none') : r.date}</bdi></dd></div>
+          </dl>
+          {unchanged && <p className="ss-hint">{t('decision.stillReady', { event: term(ORDER.event), date: ORDER.eventDate })}</p>}
+        </div>
+      )}
       <ErrorSlot state={state} />
       <div className="ss-equal">
         <div><Button variant="outline" disabled={busy} onClick={decide.keepOriginal}>{t('decision.keep')}</Button><p className="ss-hint">{t('decision.keep.help', { version: state.version })}</p></div>
-        <div><Button variant="outline" disabled={busy} onClick={decide.approve}><Check aria-hidden />{t('decision.approve', { style: term(offer) })}</Button><p className="ss-hint">{t('decision.approve.help', { style: term(offer), version: state.version + 1 })}</p></div>
+        {!refusedOnly && <div><Button variant="outline" disabled={busy} onClick={decide.approve}><Check aria-hidden />{t('decision.approve', { style: term(offer) })}</Button><p className="ss-hint">{t('decision.approve.help', { style: term(offer), version: state.version + 1 })}</p></div>}
       </div>
       <SeeOrder m={m} />
     </Card>

@@ -125,9 +125,12 @@ describe("S-01 / S-05 / A-18: the tailor's review starts blank", () => {
     viewAs("Tailor");
     pick("Cannot be made");
     expect(send()).toBeEnabled();
-    for (const l of [/Reason it cannot be made/, /Offer this instead/, "Cost effect"])
+    for (const l of [/Reason it cannot be made/, /Offer this instead/])
       expect(screen.getByLabelText(l)).toHaveValue("");
+    // Cost is asked only once something is offered.
+    expect(screen.queryByLabelText("Cost effect")).not.toBeInTheDocument();
     type(/Reason it cannot be made/, "stale reason");
+    type(/Offer this instead/, "Cuff Trim");
     type("Cost effect", "Rs 200");
     pick("Can be made");
     expect(screen.getByLabelText(/Note for/)).toHaveValue("");
